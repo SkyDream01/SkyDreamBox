@@ -16,7 +16,7 @@ from process_handler import ProcessHandler
 from ui_tabs import (
     VideoTab, AudioTab, MuxingTab, DemuxingTab, CommonOperationsTab, ProfessionalTab
 )
-from utils import STYLESHEET, PROGRESS_RE, time_str_to_seconds
+from utils import STYLESHEET, PROGRESS_RE, time_str_to_seconds, resource_path
 
 # =============================================================================
 # Main Application Window (主程序窗口)
@@ -24,10 +24,12 @@ from utils import STYLESHEET, PROGRESS_RE, time_str_to_seconds
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        logo_path = "assets/logo.png"
+        logo_path = resource_path("assets/logo.png")
         if os.path.exists(logo_path):
             self.setWindowIcon(QIcon(logo_path))
         else:
+            # 如果图标仍然没有找到，可以在控制台打印路径以帮助调试
+            print(f"DEBUG: Logo not found at path: {logo_path}")
             self.setWindowIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
         self.setWindowTitle("天梦工具箱 V1.0")
         self.setGeometry(100, 100, 850, 850)
