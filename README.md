@@ -38,7 +38,7 @@
 
 
 
-1. **Python 3**: 建议使用 Python 3.6 或更高版本。
+1. **Python 3**: 建议使用 Python 3.10 或更高版本。
 2. **FFmpeg**: **必需的外部依赖**。您必须在您的操作系统中安装 FFmpeg，并确保其路径已添加到系统环境变量中，以便程序可以从任何位置调用 `ffmpeg` 和 `ffprobe` 命令。
 3. **Python 库**: 所需的 Python 库已在 `requirements.txt` 文件中列出。
 
