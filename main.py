@@ -9,9 +9,9 @@ import datetime
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QFileDialog, QLabel, QTabWidget, QTextEdit, QProgressBar, QStyle, QSplitter,
-    QScrollArea
+    QScrollArea, QMessageBox
 )
-from PyQt5.QtCore import QProcess, QTextCodec, Qt
+from PyQt5.QtCore import QProcess, QTextCodec, Qt, QTimer
 from PyQt5.QtGui import QIcon
 
 from process_handler import ProcessHandler
@@ -26,6 +26,19 @@ from utils import STYLESHEET, PROGRESS_RE, time_str_to_seconds, resource_path, f
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        
+        # FFmpeg检测必须在UI设置之前完成
+        self.process_handler = ProcessHandler(self)
+        is_ffmpeg_ready, message = self.process_handler.check_ffmpeg()
+        if not is_ffmpeg_ready:
+            # 必须先创建窗口才能成为消息框的父级
+            self.setWindowTitle("错误") 
+            self._show_ffmpeg_error_and_exit(message)
+            # 使用QTimer确保消息框显示后程序再安全退出
+            QTimer.singleShot(100, self.close)
+            return
+
+        # FFmpeg检测通过后，继续初始化UI
         logo_path = resource_path("assets/logo.png")
         if os.path.exists(logo_path):
             self.setWindowIcon(QIcon(logo_path))
@@ -33,11 +46,10 @@ class MainWindow(QMainWindow):
             print(f"DEBUG: Logo not found at path: {logo_path}")
             self.setWindowIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
 
-        self.setWindowTitle("天梦工具箱 V1.1")
+        self.setWindowTitle("天梦工具箱 V1.2")
         self.setGeometry(100, 100, 850, 850)
         self.console = QTextEdit()
         self.console.setObjectName("console")
-        self.process_handler = ProcessHandler(self)
         self.info_label = QLabel("请选择一个媒体文件以查看信息...")
         self.info_label.setObjectName("info_label")
         self.all_tabs = []
@@ -45,6 +57,15 @@ class MainWindow(QMainWindow):
         self.last_progress_text = ""
         self._setup_ui()
         self._connect_signals()
+
+    def _show_ffmpeg_error_and_exit(self, message):
+        """显示一个关于FFmpeg的严重错误消息框。"""
+        error_box = QMessageBox(self)
+        error_box.setIcon(QMessageBox.Critical)
+        error_box.setWindowTitle("核心组件缺失")
+        error_box.setText(message)
+        error_box.setStandardButtons(QMessageBox.Ok)
+        error_box.exec_()
 
     def _setup_ui(self):
         main_widget = QWidget()
@@ -117,7 +138,6 @@ class MainWindow(QMainWindow):
         file_name, _ = QFileDialog.getOpenFileName(self, "选择输入文件")
         if not file_name: return
         
-        # 【重要改动】当选择新文件时，调用两个新的重置函数
         self.reset_media_info()
         self.reset_progress_display()
         
@@ -133,13 +153,11 @@ class MainWindow(QMainWindow):
                 output_edit.setText(f"{base_path}_output.{selected_format}")
 
     def reset_progress_display(self):
-        """【新增函数】只重置与进度条显示相关的组件。"""
         self.progress_bar.setValue(0)
         self.progress_status_label.setText("待命")
         self.last_progress_text = ""
 
     def reset_media_info(self):
-        """【新增函数】只重置与媒体文件本身信息相关的组件。"""
         self.info_label.setText("请选择一个媒体文件以查看信息...")
         self.total_duration_sec = 0
 
@@ -167,7 +185,6 @@ class MainWindow(QMainWindow):
 
     def _on_process_finished(self, exit_code, exit_status):
         self.set_buttons_enabled(True)
-        # 确保在成功时，进度条最终为100%
         if exit_status == QProcess.NormalExit and exit_code == 0:
             if self.progress_bar.value() < 100:
                 self.progress_bar.setValue(100)
@@ -248,6 +265,12 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     app.setStyleSheet(STYLESHEET)
     QTextCodec.setCodecForLocale(QTextCodec.codecForName("UTF-8"))
+    
     main_win = MainWindow()
+    
+    # 如果centralWidget未设置，说明FFmpeg检测失败，构造函数提前返回
+    if not main_win.centralWidget():
+        sys.exit(1) # 在显示窗口前退出
+    
     main_win.show()
     sys.exit(app.exec_())
