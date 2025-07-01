@@ -9,7 +9,7 @@ import datetime
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QFileDialog, QLabel, QTabWidget, QTextEdit, QProgressBar, QStyle, QSplitter,
-    QScrollArea, QMessageBox
+    QScrollArea, QMessageBox, QAction
 )
 from PyQt5.QtCore import QProcess, QTextCodec, Qt, QTimer
 from PyQt5.QtGui import QIcon
@@ -18,6 +18,8 @@ from process_handler import ProcessHandler
 from ui_tabs import (
     VideoTab, AudioTab, MuxingTab, DemuxingTab, CommonOperationsTab, ProfessionalTab
 )
+# 【代码修改】从 about.py 导入 AboutWindow
+from about import AboutWindow
 from utils import STYLESHEET, PROGRESS_RE, time_str_to_seconds, resource_path, format_media_info
 
 # =============================================================================
@@ -27,26 +29,21 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         
-        # FFmpeg检测必须在UI设置之前完成
         self.process_handler = ProcessHandler(self)
         is_ffmpeg_ready, message = self.process_handler.check_ffmpeg()
         if not is_ffmpeg_ready:
-            # 必须先创建窗口才能成为消息框的父级
             self.setWindowTitle("错误") 
             self._show_ffmpeg_error_and_exit(message)
-            # 使用QTimer确保消息框显示后程序再安全退出
             QTimer.singleShot(100, self.close)
             return
 
-        # FFmpeg检测通过后，继续初始化UI
         logo_path = resource_path("assets/logo.png")
         if os.path.exists(logo_path):
             self.setWindowIcon(QIcon(logo_path))
         else:
-            print(f"DEBUG: Logo not found at path: {logo_path}")
             self.setWindowIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
 
-        self.setWindowTitle("天梦工具箱 V1.2")
+        self.setWindowTitle("天梦工具箱 (SkyDreamBox)")
         self.setGeometry(100, 100, 850, 850)
         self.console = QTextEdit()
         self.console.setObjectName("console")
@@ -57,9 +54,11 @@ class MainWindow(QMainWindow):
         self.last_progress_text = ""
         self._setup_ui()
         self._connect_signals()
+        
+        # 【代码修改】初始化关于窗口变量
+        self.about_window = None
 
     def _show_ffmpeg_error_and_exit(self, message):
-        """显示一个关于FFmpeg的严重错误消息框。"""
         error_box = QMessageBox(self)
         error_box.setIcon(QMessageBox.Critical)
         error_box.setWindowTitle("核心组件缺失")
@@ -68,6 +67,9 @@ class MainWindow(QMainWindow):
         error_box.exec_()
 
     def _setup_ui(self):
+        # 【代码修改】创建菜单栏
+        self._create_menu_bar()
+
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
         main_layout = QVBoxLayout(main_widget)
@@ -94,7 +96,8 @@ class MainWindow(QMainWindow):
         bottom_widget = QWidget()
         bottom_layout = QVBoxLayout(bottom_widget)
         bottom_layout.setContentsMargins(0, 5, 0, 0)
-        info_console_tabs = QTabWidget()
+        
+        self.info_console_tabs = QTabWidget()
 
         info_scroll_area = QScrollArea()
         info_scroll_area.setWidgetResizable(True)
@@ -103,7 +106,7 @@ class MainWindow(QMainWindow):
         self.info_label.setWordWrap(True)
         self.info_label.setAlignment(Qt.AlignTop)
         info_scroll_area.setWidget(self.info_label)
-        info_console_tabs.addTab(info_scroll_area, "媒体文件信息")
+        self.info_console_tabs.addTab(info_scroll_area, "媒体文件信息")
 
         console_widget = QWidget()
         console_layout = QVBoxLayout(console_widget)
@@ -121,18 +124,38 @@ class MainWindow(QMainWindow):
 
         console_layout.addWidget(self.console)
         console_layout.addLayout(progress_layout)
-        info_console_tabs.addTab(console_widget, "FFmpeg 输出信息")
+        self.info_console_tabs.addTab(console_widget, "FFmpeg 输出信息")
 
-        bottom_layout.addWidget(info_console_tabs)
+        bottom_layout.addWidget(self.info_console_tabs)
         splitter.addWidget(bottom_widget)
         splitter.setSizes([600, 250])
         main_layout.addWidget(splitter)
+
+    # 【代码修改】新增创建菜单栏的方法
+    def _create_menu_bar(self):
+        menu_bar = self.menuBar()
+        help_menu = menu_bar.addMenu("帮助")
+
+        about_action = QAction("关于", self)
+        about_action.triggered.connect(self._show_about_dialog)
+        help_menu.addAction(about_action)
+
+    # 【代码修改】新增显示“关于”对话框的方法
+    def _show_about_dialog(self):
+        # 确保只创建一个实例
+        if self.about_window is None:
+            self.about_window = AboutWindow(self)
+        self.about_window.exec_() # 使用 exec_() 以模态方式显示
 
     def _connect_signals(self):
         self.process_handler.ffmpeg_process.readyReadStandardOutput.connect(self._handle_stdout)
         self.process_handler.ffmpeg_process.readyReadStandardError.connect(self._handle_stderr)
         self.process_handler.ffmpeg_process.finished.connect(self._on_process_finished)
         self.process_handler.ffprobe_process.finished.connect(self._on_probe_finished)
+
+    def switch_to_console_tab(self):
+        if hasattr(self, 'info_console_tabs'):
+            self.info_console_tabs.setCurrentIndex(1)
 
     def select_file(self, target_line_edit):
         file_name, _ = QFileDialog.getOpenFileName(self, "选择输入文件")
@@ -268,9 +291,8 @@ if __name__ == '__main__':
     
     main_win = MainWindow()
     
-    # 如果centralWidget未设置，说明FFmpeg检测失败，构造函数提前返回
     if not main_win.centralWidget():
-        sys.exit(1) # 在显示窗口前退出
+        sys.exit(1)
     
     main_win.show()
     sys.exit(app.exec_())

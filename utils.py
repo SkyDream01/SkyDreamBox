@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# SkyDreamBox/utils.py
+
 import re
 import sys
 import os
@@ -7,14 +9,51 @@ import datetime
 # =============================================================================
 # Constants and Configurations (常量与配置)
 # =============================================================================
-VIDEO_FORMATS = ["mp4", "mkv", "avi", "mov", "webm"]
-VIDEO_CODECS = ["libx264", "libx265", "copy", "vp9", "h264_nvenc", "hevc_nvenc"]
-AUDIO_CODECS_VIDEO_TAB = ["aac", "mp3", "copy", "flac"]
+
+# --- 【修改】格式与编码器的映射关系 ---
+
+# 视频格式 -> 兼容的视频编码器列表
+VIDEO_FORMAT_CODECS = {
+    "mp4": ["libx264", "libx265", "h264_nvenc", "hevc_nvenc"],
+    "mkv": ["libx264", "libx265", "h264_nvenc", "hevc_nvenc", "vp9", "copy"],
+    "avi": ["libx264", "mpeg4"],
+    "mov": ["libx264", "libx265", "h264_nvenc", "hevc_nvenc"],
+    "webm": ["vp9", "libvpx-vp9"]
+}
+
+# 视频格式 -> 兼容的音频编码器列表 (用于视频处理选项卡)
+AUDIO_CODECS_FOR_VIDEO_FORMAT = {
+    "mp4": ["aac", "mp3", "alac", "copy"],
+    "mkv": ["aac", "mp3", "flac", "opus", "copy"],
+    "avi": ["mp3", "aac"],
+    "mov": ["aac", "mp3", "alac", "copy"],
+    "webm": ["opus", "vorbis", "copy"]
+}
+
+# 音频格式 -> 兼容的音频编码器列表
+AUDIO_FORMAT_CODECS = {
+    "mp3": ["libmp3lame"],
+    "flac": ["flac"],
+    "aac": ["aac"],
+    "wav": ["pcm_s16le (16-bit)", "pcm_s24le (24-bit)", "pcm_s32le (32-bit)", "pcm_u8 (8-bit)"],
+    "opus": ["libopus"],
+    "alac": ["alac"],
+    "m4a": ["aac", "alac", "copy"]
+}
+
+# --- 原有常量列表 (现在由上面的映射关系动态生成) ---
+VIDEO_FORMATS = list(VIDEO_FORMAT_CODECS.keys())
+VIDEO_CODECS = sorted(list(set(codec for codecs in VIDEO_FORMAT_CODECS.values() for codec in codecs)))
+AUDIO_CODECS_VIDEO_TAB = sorted(list(set(codec for codecs in AUDIO_CODECS_FOR_VIDEO_FORMAT.values() for codec in codecs)))
+AUDIO_FORMATS = list(AUDIO_FORMAT_CODECS.keys())
+AUDIO_CODECS_AUDIO_TAB = sorted(list(set(codec for codecs in AUDIO_FORMAT_CODECS.values() for codec in codecs)))
+
+# --- 其他常量 ---
 AUDIO_BITRATES = ["128k", "192k", "256k", "320k"]
-AUDIO_FORMATS = ["mp3", "flac", "aac", "wav", "opus", "alac", "m4a"]
-AUDIO_CODECS_AUDIO_TAB = ["libmp3lame", "flac", "aac", "pcm_s16le", "libopus", "alac", "copy"]
+AUDIO_SAMPLE_RATES = ["(默认)", "24000", "44100", "48000", "96000", "192000"]
 SUBTITLE_FORMATS = "字幕文件 (*.srt *.ass *.ssa);;所有文件 (*)"
 DEFAULT_COMPRESSION_LEVEL = "5"
+
 
 # =============================================================================
 # Stylesheet (样式表)
@@ -147,7 +186,7 @@ QScrollArea {
 PROGRESS_RE = re.compile(
     r"frame=\s*(?P<frame>\d+)\s+"
     r"fps=\s*(?P<fps>[\d\.]+)\s+"
-    r".*?"  # 使用非贪婪匹配来灵活处理中间可能出现的任何字符 (如 q, size, Lsize)
+    r".*?"
     r"time=\s*(?P<time>[\d:\.]+)\s+"
     r".*?"
     r"speed=\s*(?P<speed>[\d\.]+)x"
@@ -174,9 +213,6 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 def format_media_info(data):
-    """
-    将从 ffprobe 获取的 JSON 数据格式化为 HTML 字符串用于显示。
-    """
     try:
         fmt = data.get('format', {})
         filename = os.path.basename(fmt.get('filename', 'N/A'))
