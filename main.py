@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# SkyDreamBox/main.py
+
 import sys
 import os
 import json
@@ -16,7 +18,6 @@ from process_handler import ProcessHandler
 from ui_tabs import (
     VideoTab, AudioTab, MuxingTab, DemuxingTab, CommonOperationsTab, ProfessionalTab
 )
-# 导入重构后的工具函数
 from utils import STYLESHEET, PROGRESS_RE, time_str_to_seconds, resource_path, format_media_info
 
 # =============================================================================
@@ -107,16 +108,19 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(splitter)
 
     def _connect_signals(self):
-        self.process_handler.ffmpeg_process.readyReadStandardOutput.connect(self._update_console)
-        self.process_handler.ffmpeg_process.readyReadStandardError.connect(self._update_console)
-        self.process_handler.ffmpeg_process.readyReadStandardError.connect(self._update_progress)
+        self.process_handler.ffmpeg_process.readyReadStandardOutput.connect(self._handle_stdout)
+        self.process_handler.ffmpeg_process.readyReadStandardError.connect(self._handle_stderr)
         self.process_handler.ffmpeg_process.finished.connect(self._on_process_finished)
         self.process_handler.ffprobe_process.finished.connect(self._on_probe_finished)
 
     def select_file(self, target_line_edit):
         file_name, _ = QFileDialog.getOpenFileName(self, "选择输入文件")
         if not file_name: return
-        self.reset_progress()
+        
+        # 【重要改动】当选择新文件时，调用两个新的重置函数
+        self.reset_media_info()
+        self.reset_progress_display()
+        
         target_line_edit.setText(file_name)
         self.process_handler.run_ffprobe(file_name)
         current_tab = self.tabs.currentWidget()
@@ -128,11 +132,16 @@ class MainWindow(QMainWindow):
                 selected_format = format_combo.currentText()
                 output_edit.setText(f"{base_path}_output.{selected_format}")
 
-    def reset_progress(self):
+    def reset_progress_display(self):
+        """【新增函数】只重置与进度条显示相关的组件。"""
         self.progress_bar.setValue(0)
         self.progress_status_label.setText("待命")
-        self.total_duration_sec = 0
         self.last_progress_text = ""
+
+    def reset_media_info(self):
+        """【新增函数】只重置与媒体文件本身信息相关的组件。"""
+        self.info_label.setText("请选择一个媒体文件以查看信息...")
+        self.total_duration_sec = 0
 
     def set_buttons_enabled(self, enabled):
         for tab in self.all_tabs:
@@ -149,60 +158,88 @@ class MainWindow(QMainWindow):
         output = self.process_handler.ffprobe_process.readAllStandardOutput().data().decode('utf-8', 'ignore')
         try:
             data = json.loads(output)
-            # 调用从 utils.py 导入的函数
             self.info_label.setText(format_media_info(data))
             if 'format' in data and 'duration' in data['format']:
                 self.total_duration_sec = float(data['format']['duration'])
-        except (json.JSONDecodeError, KeyError, TypeError):
-            self.info_label.setText("<font color='red'>无法解析文件信息或获取时长。</font>")
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            self.info_label.setText(f"<font color='red'>无法解析文件信息或获取时长: {e}</font>")
             self.total_duration_sec = 0
 
     def _on_process_finished(self, exit_code, exit_status):
         self.set_buttons_enabled(True)
+        # 确保在成功时，进度条最终为100%
         if exit_status == QProcess.NormalExit and exit_code == 0:
+            if self.progress_bar.value() < 100:
+                self.progress_bar.setValue(100)
             self.console.append("\n<hr><b><font color='#4CAF50'>处理成功完成!</font></b>")
-            self.progress_bar.setValue(100)
             self.progress_status_label.setText("处理成功!")
         else:
             self.console.append(f"\n<hr><b><font color='#F44336'>处理失败! (退出码: {exit_code})</font></b>")
             self.progress_status_label.setText("处理失败!")
         self.last_progress_text = ""
 
-    def _update_console(self):
-        process = self.sender()
+    def _handle_stdout(self):
+        process = self.process_handler.ffmpeg_process
         if not process: return
         codec = QTextCodec.codecForLocale()
-        message = codec.toUnicode(process.readAll())
+        message = codec.toUnicode(process.readAllStandardOutput())
         self.console.insertPlainText(message)
         self.console.ensureCursorVisible()
 
-    def _update_progress(self):
+    def _handle_stderr(self):
         process = self.process_handler.ffmpeg_process
         if not process: return
-        output = process.readAllStandardError().data().decode('utf-8', 'ignore')
+        error_output = process.readAllStandardError().data().decode('utf-8', 'ignore')
+        self.console.insertPlainText(error_output)
+        self.console.ensureCursorVisible()
+        self._parse_and_update_progress(error_output)
+
+    def _parse_and_update_progress(self, output):
         text = self.last_progress_text + output
         lines = text.split('\r')
         self.last_progress_text = lines[-1]
+
         if not lines[:-1]: return
-        latest_line = lines[-2] # Get the last complete line
+            
+        latest_line = ""
+        for line in reversed(lines[:-1]):
+            if 'frame=' in line and 'time=' in line:
+                latest_line = line
+                break
+        
+        if not latest_line: return
+
         match = PROGRESS_RE.search(latest_line)
-        if match and self.total_duration_sec > 0:
-            data = match.groupdict()
-            current_time_sec = time_str_to_seconds(data.get('time', '0'))
-            percentage = int((current_time_sec / self.total_duration_sec) * 100)
-            self.progress_bar.setValue(min(percentage, 100))
-            speed_str = data.get('speed', '0').replace('x', '')
-            speed = float(speed_str) if speed_str else 0
-            eta_str = "N/A"
-            if speed > 0:
-                remaining_sec = (self.total_duration_sec - current_time_sec) / speed
+        if not match: return
+
+        if self.total_duration_sec <= 0:
+            self.progress_status_label.setText("正在处理 (时长未知)...")
+            return 
+
+        data = match.groupdict()
+        current_time_sec = time_str_to_seconds(data.get('time', '0'))
+        percentage = min(100, int((current_time_sec / self.total_duration_sec) * 100))
+        self.progress_bar.setValue(percentage)
+        
+        speed_str = data.get('speed', '0').replace('x', '')
+        try: speed = float(speed_str)
+        except (ValueError, TypeError): speed = 0
+            
+        eta_str = "N/A"
+        if speed > 0:
+            remaining_sec = (self.total_duration_sec - current_time_sec) / speed
+            if remaining_sec > 0:
                 eta_str = str(datetime.timedelta(seconds=int(remaining_sec)))
-            fps_str = data.get('fps', '0.0')
-            status_text = (f"{percentage}% | "
-                           f"FPS: {float(fps_str):.1f} | "
-                           f"速度: {speed:.2f}x | "
-                           f"剩余: {eta_str}")
-            self.progress_status_label.setText(status_text)
+
+        fps_str = data.get('fps', '0.0')
+        try: fps = float(fps_str)
+        except (ValueError, TypeError): fps = 0.0
+
+        status_text = (f"{percentage}% | "
+                       f"FPS: {fps:.1f} | "
+                       f"速度: {speed:.2f}x | "
+                       f"剩余: {eta_str}")
+        self.progress_status_label.setText(status_text)
 
 # =============================================================================
 # Main Execution (主程序入口)

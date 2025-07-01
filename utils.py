@@ -147,10 +147,9 @@ QScrollArea {
 PROGRESS_RE = re.compile(
     r"frame=\s*(?P<frame>\d+)\s+"
     r"fps=\s*(?P<fps>[\d\.]+)\s+"
-    r"q=\s*(?P<q>[\d\.-]+)\s+"
-    r".*?"
+    r".*?"  # 使用非贪婪匹配来灵活处理中间可能出现的任何字符 (如 q, size, Lsize)
     r"time=\s*(?P<time>[\d:\.]+)\s+"
-    r"bitrate=\s*(?P<bitrate>[\d\.]+)kbits/s\s+"
+    r".*?"
     r"speed=\s*(?P<speed>[\d\.]+)x"
 )
 

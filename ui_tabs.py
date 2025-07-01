@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# SkyDreamBox/ui_tabs.py
+
 import os
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QFileDialog, QLineEdit,
@@ -11,7 +13,7 @@ from utils import (
 )
 
 # =============================================================================
-# UI Base Class (UI基类) - 已优化
+# UI Base Class (UI基类)
 # =============================================================================
 class BaseTab(QWidget):
     def __init__(self, process_handler, console, main_window, parent=None):
@@ -20,23 +22,20 @@ class BaseTab(QWidget):
         self.console = console
         self.main_window = main_window
         self.run_button = None
-        self._init_ui() # 统一调用 _init_ui
+        self._init_ui()
 
     def _init_ui(self):
-        # 这个方法应该在子类中被重写
         raise NotImplementedError
 
     def _get_command(self):
-        # 这个方法应该在子类中被重写
         raise NotImplementedError
 
     def _run_command(self):
-        # 在执行命令前，先重置主窗口的进度条
-        self.main_window.reset_progress()
+        # 【重要改动】调用只重置进度条显示的新函数，不再清除总时长
+        self.main_window.reset_progress_display()
         try:
             command = self._get_command()
             if command:
-                # 移除了对 'ffmpeg' 字符串的特殊处理，交由 process_handler
                 is_started, message = self.process_handler.run_ffmpeg(command)
                 if not is_started:
                     self.console.append(f"<font color='orange'>{message}</font>")
@@ -48,13 +47,11 @@ class BaseTab(QWidget):
             self.console.append(f"<font color='red'>错误: {e}</font>")
 
     def _create_file_input(self, label_text, button_text="选择文件", callback=None):
-        """通用的文件输入框创建工厂函数。"""
         layout = QHBoxLayout()
         line_edit = QLineEdit()
         button = QPushButton(button_text)
         button.setIcon(self.style().standardIcon(QStyle.SP_DirOpenIcon))
         
-        # 如果没有提供特定的回调，就使用主窗口默认的文件选择器
         effective_callback = callback or (lambda le: self.main_window.select_file(le))
         button.clicked.connect(lambda: effective_callback(line_edit))
         
@@ -350,7 +347,6 @@ class DemuxingTab(BaseTab):
         main_layout.addStretch()
         self.extract_video_button.clicked.connect(lambda: self._run_demux_command('video'))
         self.extract_audio_button.clicked.connect(lambda: self._run_demux_command('audio'))
-        # Set a default run_button so main window can disable it
         self.run_button = self.extract_video_button 
 
     def _run_demux_command(self, stream_type):
@@ -410,7 +406,6 @@ class CommonOperationsTab(BaseTab):
         main_layout.addStretch()
         self.trim_button.clicked.connect(lambda: self._run_specific_command('trim'))
         self.img_audio_button.clicked.connect(lambda: self._run_specific_command('img_audio'))
-        # Set a default run_button so main window can disable it
         self.run_button = self.trim_button 
 
     def _run_specific_command(self, command_type):
@@ -460,7 +455,7 @@ class ProfessionalTab(BaseTab):
         layout.addWidget(QLabel("在此处输入完整的FFmpeg命令:"))
         self.command_input = QTextEdit()
         self.command_input.setPlaceholderText("e.g., ffmpeg -i input.mp4 -c:v libx264 -crf 22 output.mp4")
-        self.command_input.setObjectName("console") # Reuse console style for mono font
+        self.command_input.setObjectName("console")
         layout.addWidget(self.command_input)
         self.run_button = QPushButton("执行命令")
         self.run_button.clicked.connect(self._run_command)
@@ -471,5 +466,4 @@ class ProfessionalTab(BaseTab):
         command_text = self.command_input.toPlainText().strip()
         if not command_text:
             raise ValueError("命令不能为空。")
-        # 直接返回用户输入的、按空格分割的命令列表
         return command_text.split()
