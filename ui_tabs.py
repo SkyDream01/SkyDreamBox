@@ -11,7 +11,7 @@ from utils import (
 )
 
 # =============================================================================
-# UI Base Class (UI基类)
+# UI Base Class (UI基类) - 已优化
 # =============================================================================
 class BaseTab(QWidget):
     def __init__(self, process_handler, console, main_window, parent=None):
@@ -20,15 +20,23 @@ class BaseTab(QWidget):
         self.console = console
         self.main_window = main_window
         self.run_button = None
-        self._init_ui_base()
+        self._init_ui() # 统一调用 _init_ui
 
-    def _init_ui_base(self): raise NotImplementedError
-    def _get_command(self): raise NotImplementedError
+    def _init_ui(self):
+        # 这个方法应该在子类中被重写
+        raise NotImplementedError
+
+    def _get_command(self):
+        # 这个方法应该在子类中被重写
+        raise NotImplementedError
 
     def _run_command(self):
+        # 在执行命令前，先重置主窗口的进度条
+        self.main_window.reset_progress()
         try:
             command = self._get_command()
             if command:
+                # 移除了对 'ffmpeg' 字符串的特殊处理，交由 process_handler
                 is_started, message = self.process_handler.run_ffmpeg(command)
                 if not is_started:
                     self.console.append(f"<font color='orange'>{message}</font>")
@@ -39,27 +47,33 @@ class BaseTab(QWidget):
         except (ValueError, FileNotFoundError) as e:
             self.console.append(f"<font color='red'>错误: {e}</font>")
 
-    def _create_file_input(self, label_text, button_text, select_callback):
+    def _create_file_input(self, label_text, button_text="选择文件", callback=None):
+        """通用的文件输入框创建工厂函数。"""
         layout = QHBoxLayout()
         line_edit = QLineEdit()
         button = QPushButton(button_text)
         button.setIcon(self.style().standardIcon(QStyle.SP_DirOpenIcon))
-        button.clicked.connect(lambda: select_callback(line_edit))
+        
+        # 如果没有提供特定的回调，就使用主窗口默认的文件选择器
+        effective_callback = callback or (lambda le: self.main_window.select_file(le))
+        button.clicked.connect(lambda: effective_callback(line_edit))
+        
         layout.addWidget(QLabel(label_text))
         layout.addWidget(line_edit)
         layout.addWidget(button)
         return layout, line_edit
 
 # =============================================================================
-# UI Tabs Module
+# UI Tabs Module (所有选项卡的完整实现)
 # =============================================================================
+
 class VideoTab(BaseTab):
-    def _init_ui_base(self):
+    def _init_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(15)
         io_group = QGroupBox("输入与输出")
         io_layout = QVBoxLayout(io_group)
-        input_layout, self.input_edit = self._create_file_input("视频文件:", "选择文件", self.main_window.select_file)
+        input_layout, self.input_edit = self._create_file_input("视频文件:")
         output_layout, self.output_edit = self._create_file_input("输出路径:", "选择路径", self.select_output_path)
         io_layout.addLayout(input_layout)
         io_layout.addLayout(output_layout)
@@ -184,12 +198,12 @@ class VideoTab(BaseTab):
         return command
 
 class AudioTab(BaseTab):
-    def _init_ui_base(self):
+    def _init_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(15)
         io_group = QGroupBox("输入与输出")
         io_layout = QVBoxLayout(io_group)
-        input_layout, self.input_edit = self._create_file_input("音频文件:", "选择文件", self.main_window.select_file)
+        input_layout, self.input_edit = self._create_file_input("音频文件:")
         output_layout, self.output_edit = self._create_file_input("输出路径:", "选择路径", self.select_output_path)
         io_layout.addLayout(input_layout)
         io_layout.addLayout(output_layout)
@@ -262,13 +276,13 @@ class AudioTab(BaseTab):
         return command
 
 class MuxingTab(BaseTab):
-    def _init_ui_base(self):
+    def _init_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(15)
         mux_group = QGroupBox("封装 (合并音视频)")
         mux_layout = QVBoxLayout(mux_group)
-        video_input_layout, self.video_input_edit = self._create_file_input("视频文件:", "选择视频", self.main_window.select_file)
-        audio_input_layout, self.audio_input_edit = self._create_file_input("音频文件:", "选择音频", self.main_window.select_file)
+        video_input_layout, self.video_input_edit = self._create_file_input("视频文件:", "选择视频")
+        audio_input_layout, self.audio_input_edit = self._create_file_input("音频文件:", "选择音频")
         subtitle_input_layout, self.subtitle_input_edit = self._create_file_input("字幕文件:", "选择字幕", self.select_subtitle_file)
         output_layout, self.output_edit = self._create_file_input("输出文件:", "选择路径", self.select_output_path)
         mux_layout.addLayout(video_input_layout)
@@ -298,36 +312,33 @@ class MuxingTab(BaseTab):
         if not output_file: raise ValueError("输出文件路径不能为空。")
         command = ["ffmpeg"]
         inputs = []
+        map_commands = []
+        input_index = 0
+        
         if video_file:
             command.extend(["-i", video_file])
-            inputs.append('video')
+            map_commands.extend(["-map", f"{input_index}:v?"])
+            input_index += 1
         if audio_file:
             command.extend(["-i", audio_file])
-            inputs.append('audio')
+            map_commands.extend(["-map", f"{input_index}:a?"])
+            input_index += 1
         if subtitle_file:
             command.extend(["-i", subtitle_file])
-            inputs.append('subtitle')
+            map_commands.extend(["-map", f"{input_index}:s?"])
+            input_index += 1
 
-        command.extend(["-c", "copy"])
-
-        for i, input_type in enumerate(inputs):
-            if input_type == 'video':
-                command.extend(["-map", f"{i}:v?"])
-            elif input_type == 'audio':
-                command.extend(["-map", f"{i}:a?"])
-            elif input_type == 'subtitle':
-                command.extend(["-map", f"{i}:s?"])
-
-        command.extend(["-y", output_file])
+        command.extend(map_commands)
+        command.extend(["-c", "copy", "-y", output_file])
         return command
 
 class DemuxingTab(BaseTab):
-    def _init_ui_base(self):
+    def _init_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(15)
         demux_group = QGroupBox("抽取音/视频")
         demux_layout = QVBoxLayout(demux_group)
-        input_layout, self.input_edit = self._create_file_input("输入文件:", "选择文件", self.main_window.select_file)
+        input_layout, self.input_edit = self._create_file_input("输入文件:")
         demux_layout.addLayout(input_layout)
         buttons_layout = QHBoxLayout()
         self.extract_video_button = QPushButton("抽取视频流")
@@ -339,7 +350,8 @@ class DemuxingTab(BaseTab):
         main_layout.addStretch()
         self.extract_video_button.clicked.connect(lambda: self._run_demux_command('video'))
         self.extract_audio_button.clicked.connect(lambda: self._run_demux_command('audio'))
-        self.run_button = self.extract_video_button
+        # Set a default run_button so main window can disable it
+        self.run_button = self.extract_video_button 
 
     def _run_demux_command(self, stream_type):
         self.current_stream_type = stream_type
@@ -363,12 +375,12 @@ class DemuxingTab(BaseTab):
         return command
 
 class CommonOperationsTab(BaseTab):
-    def _init_ui_base(self):
+    def _init_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(15)
         trim_group = QGroupBox("视频截取")
         trim_layout = QVBoxLayout(trim_group)
-        input_layout, self.trim_input_edit = self._create_file_input("输入文件:", "选择文件", self.main_window.select_file)
+        input_layout, self.trim_input_edit = self._create_file_input("输入文件:")
         output_layout, self.trim_output_edit = self._create_file_input("输出文件:", "选择路径", self.select_trim_output_path)
         time_layout = QHBoxLayout()
         self.start_time_edit = QLineEdit("00:00:00")
@@ -387,7 +399,7 @@ class CommonOperationsTab(BaseTab):
         img_audio_group = QGroupBox("图声合成")
         img_audio_layout = QVBoxLayout(img_audio_group)
         img_layout, self.img_input_edit = self._create_file_input("图片文件:", "选择图片", self.select_image_file)
-        audio_layout, self.audio_input_edit = self._create_file_input("音频文件:", "选择音频", self.main_window.select_file)
+        audio_layout, self.audio_input_edit = self._create_file_input("音频文件:", "选择音频")
         output_layout, self.img_audio_output_edit = self._create_file_input("输出视频:", "选择路径", self.select_img_audio_output_path)
         self.img_audio_button = QPushButton("开始合成")
         img_audio_layout.addLayout(img_layout)
@@ -398,7 +410,8 @@ class CommonOperationsTab(BaseTab):
         main_layout.addStretch()
         self.trim_button.clicked.connect(lambda: self._run_specific_command('trim'))
         self.img_audio_button.clicked.connect(lambda: self._run_specific_command('img_audio'))
-        self.run_button = self.trim_button
+        # Set a default run_button so main window can disable it
+        self.run_button = self.trim_button 
 
     def _run_specific_command(self, command_type):
         self.current_command = command_type
@@ -423,8 +436,10 @@ class CommonOperationsTab(BaseTab):
             output_file = self.trim_output_edit.text()
             if not all([input_file, output_file]): raise ValueError("截取功能的输入和输出均不能为空。")
             command = ["ffmpeg", "-i", input_file]
-            if self.start_time_edit.text() != "00:00:00": command.extend(["-ss", self.start_time_edit.text()])
-            if self.end_time_edit.text(): command.extend(["-to", self.end_time_edit.text()])
+            if self.start_time_edit.text() and self.start_time_edit.text() != "00:00:00": 
+                command.extend(["-ss", self.start_time_edit.text()])
+            if self.end_time_edit.text(): 
+                command.extend(["-to", self.end_time_edit.text()])
             command.extend(["-c", "copy", "-y", output_file])
             return command
         elif command_type == 'img_audio':
@@ -439,14 +454,22 @@ class CommonOperationsTab(BaseTab):
         raise ValueError("未知的常用操作。")
 
 class ProfessionalTab(BaseTab):
-    def _init_ui_base(self):
+    def _init_ui(self):
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
         layout.addWidget(QLabel("在此处输入完整的FFmpeg命令:"))
         self.command_input = QTextEdit()
         self.command_input.setPlaceholderText("e.g., ffmpeg -i input.mp4 -c:v libx264 -crf 22 output.mp4")
+        self.command_input.setObjectName("console") # Reuse console style for mono font
         layout.addWidget(self.command_input)
         self.run_button = QPushButton("执行命令")
         self.run_button.clicked.connect(self._run_command)
         layout.addWidget(self.run_button, 0, Qt.AlignCenter)
         layout.addStretch()
+
+    def _get_command(self):
+        command_text = self.command_input.toPlainText().strip()
+        if not command_text:
+            raise ValueError("命令不能为空。")
+        # 直接返回用户输入的、按空格分割的命令列表
+        return command_text.split()
