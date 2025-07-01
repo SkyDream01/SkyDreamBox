@@ -8,7 +8,8 @@ import os
 # =============================================================================
 VIDEO_FORMATS = ["mp4", "mkv", "avi", "mov", "webm"]
 VIDEO_CODECS = ["libx264", "libx265", "copy", "vp9", "h264_nvenc", "hevc_nvenc"]
-AUDIO_CODECS_VIDEO_TAB = ["aac", "mp3", "copy", "opus", "flac"]
+AUDIO_CODECS_VIDEO_TAB = ["aac", "mp3", "copy", "flac"] #移除了 'opus'
+AUDIO_BITRATES = ["128k", "192k", "256k", "320k"] #新增音频码率选项
 AUDIO_FORMATS = ["mp3", "flac", "aac", "wav", "opus", "alac", "m4a"]
 AUDIO_CODECS_AUDIO_TAB = ["libmp3lame", "flac", "aac", "pcm_s16le", "libopus", "alac", "copy"]
 SUBTITLE_FORMATS = "字幕文件 (*.srt *.ass *.ssa);;所有文件 (*)"

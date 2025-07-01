@@ -6,8 +6,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 from utils import (
-    VIDEO_FORMATS, VIDEO_CODECS, AUDIO_CODECS_VIDEO_TAB, AUDIO_FORMATS,
-    AUDIO_CODECS_AUDIO_TAB, SUBTITLE_FORMATS, DEFAULT_COMPRESSION_LEVEL
+    VIDEO_FORMATS, VIDEO_CODECS, AUDIO_CODECS_VIDEO_TAB, AUDIO_BITRATES,
+    AUDIO_FORMATS, AUDIO_CODECS_AUDIO_TAB, SUBTITLE_FORMATS, DEFAULT_COMPRESSION_LEVEL
 )
 
 # =============================================================================
@@ -112,14 +112,17 @@ class VideoTab(BaseTab):
         codec_a_layout.addWidget(QLabel("音频编码器:"))
         self.audio_codec_combo = QComboBox()
         self.audio_codec_combo.addItems(AUDIO_CODECS_VIDEO_TAB)
+        self.audio_codec_combo.currentIndexChanged.connect(self._update_audio_options)
         codec_a_layout.addWidget(self.audio_codec_combo)
-        bitrate_a_layout = QHBoxLayout()
-        bitrate_a_layout.addWidget(QLabel("音频比特率:"))
-        self.audio_bitrate_edit = QLineEdit("192k")
-        self.audio_bitrate_edit.setPlaceholderText("e.g., 192k")
-        bitrate_a_layout.addWidget(self.audio_bitrate_edit)
+        self.bitrate_a_layout = QHBoxLayout()
+        self.audio_bitrate_label = QLabel("音频比特率:")
+        self.audio_bitrate_combo = QComboBox()
+        self.audio_bitrate_combo.addItems(AUDIO_BITRATES)
+        self.audio_bitrate_combo.setCurrentText("192k")
+        self.bitrate_a_layout.addWidget(self.audio_bitrate_label)
+        self.bitrate_a_layout.addWidget(self.audio_bitrate_combo)
         audio_layout.addLayout(codec_a_layout)
-        audio_layout.addLayout(bitrate_a_layout)
+        audio_layout.addLayout(self.bitrate_a_layout)
         options_layout.addWidget(audio_group)
         subtitle_layout, self.subtitle_edit = self._create_file_input("字幕文件:", "选择字幕", self.select_subtitle_file)
         options_layout.addLayout(subtitle_layout)
@@ -128,6 +131,13 @@ class VideoTab(BaseTab):
         self.run_button.clicked.connect(self._run_command)
         main_layout.addWidget(self.run_button, 0, Qt.AlignCenter)
         main_layout.addStretch()
+        self._update_audio_options()
+
+    def _update_audio_options(self):
+        codec = self.audio_codec_combo.currentText()
+        show_bitrate = codec not in ['flac', 'copy']
+        self.audio_bitrate_label.setVisible(show_bitrate)
+        self.audio_bitrate_combo.setVisible(show_bitrate)
 
     def _on_format_changed(self, new_format):
         current_path = self.output_edit.text()
@@ -164,8 +174,8 @@ class VideoTab(BaseTab):
                 command.extend(["-r", self.fps_edit.text()])
         audio_codec = self.audio_codec_combo.currentText()
         command.extend(["-c:a", audio_codec])
-        if audio_codec != 'copy' and self.audio_bitrate_edit.text():
-            command.extend(["-b:a", self.audio_bitrate_edit.text()])
+        if audio_codec not in ['copy', 'flac']:
+            command.extend(["-b:a", self.audio_bitrate_combo.currentText()])
         if self.subtitle_edit.text():
             command.extend(["-map", "0", "-map", "1"])
             codec = "mov_text" if self.format_combo.currentText() == 'mp4' else "copy"
