@@ -1,18 +1,59 @@
 # -*- coding: utf-8 -*-
+# SkyDreamBox/utils.py
+
 import re
 import sys
 import os
+import datetime
 
 # =============================================================================
 # Constants and Configurations (常量与配置)
 # =============================================================================
-VIDEO_FORMATS = ["mp4", "mkv", "avi", "mov", "webm"]
-VIDEO_CODECS = ["libx264", "libx265", "copy", "vp9", "h264_nvenc", "hevc_nvenc"]
-AUDIO_CODECS_VIDEO_TAB = ["aac", "mp3", "copy", "opus", "flac"]
-AUDIO_FORMATS = ["mp3", "flac", "aac", "wav", "opus", "alac", "m4a"]
-AUDIO_CODECS_AUDIO_TAB = ["libmp3lame", "flac", "aac", "pcm_s16le", "libopus", "alac", "copy"]
+
+# --- 【修改】格式与编码器的映射关系 ---
+
+# 视频格式 -> 兼容的视频编码器列表
+VIDEO_FORMAT_CODECS = {
+    "mp4": ["libx264", "libx265", "h264_nvenc", "hevc_nvenc"],
+    "mkv": ["libx264", "libx265", "h264_nvenc", "hevc_nvenc", "vp9", "copy"],
+    "avi": ["libx264", "mpeg4"],
+    "mov": ["libx264", "libx265", "h264_nvenc", "hevc_nvenc"],
+    "webm": ["vp9", "libvpx-vp9"]
+}
+
+# 视频格式 -> 兼容的音频编码器列表 (用于视频处理选项卡)
+AUDIO_CODECS_FOR_VIDEO_FORMAT = {
+    "mp4": ["aac", "mp3", "alac", "copy"],
+    "mkv": ["aac", "mp3", "flac", "opus", "copy"],
+    "avi": ["mp3", "aac"],
+    "mov": ["aac", "mp3", "alac", "copy"],
+    "webm": ["opus", "vorbis", "copy"]
+}
+
+# 音频格式 -> 兼容的音频编码器列表
+AUDIO_FORMAT_CODECS = {
+    "mp3": ["libmp3lame"],
+    "flac": ["flac"],
+    "aac": ["aac"],
+    "wav": ["pcm_s16le (16-bit)", "pcm_s24le (24-bit)", "pcm_s32le (32-bit)", "pcm_u8 (8-bit)"],
+    "opus": ["libopus"],
+    "alac": ["alac"],
+    "m4a": ["aac", "alac", "copy"]
+}
+
+# --- 原有常量列表 (现在由上面的映射关系动态生成) ---
+VIDEO_FORMATS = list(VIDEO_FORMAT_CODECS.keys())
+VIDEO_CODECS = sorted(list(set(codec for codecs in VIDEO_FORMAT_CODECS.values() for codec in codecs)))
+AUDIO_CODECS_VIDEO_TAB = sorted(list(set(codec for codecs in AUDIO_CODECS_FOR_VIDEO_FORMAT.values() for codec in codecs)))
+AUDIO_FORMATS = list(AUDIO_FORMAT_CODECS.keys())
+AUDIO_CODECS_AUDIO_TAB = sorted(list(set(codec for codecs in AUDIO_FORMAT_CODECS.values() for codec in codecs)))
+
+# --- 其他常量 ---
+AUDIO_BITRATES = ["128k", "192k", "256k", "320k"]
+AUDIO_SAMPLE_RATES = ["(默认)", "24000", "44100", "48000", "96000", "192000"]
 SUBTITLE_FORMATS = "字幕文件 (*.srt *.ass *.ssa);;所有文件 (*)"
 DEFAULT_COMPRESSION_LEVEL = "5"
+
 
 # =============================================================================
 # Stylesheet (样式表)
@@ -139,13 +180,15 @@ QScrollArea {
 }
 """
 
+# =============================================================================
+# Regular Expression for Progress Parsing (进度解析正则表达式)
+# =============================================================================
 PROGRESS_RE = re.compile(
     r"frame=\s*(?P<frame>\d+)\s+"
     r"fps=\s*(?P<fps>[\d\.]+)\s+"
-    r"q=\s*(?P<q>[\d\.-]+)\s+"
     r".*?"
     r"time=\s*(?P<time>[\d:\.]+)\s+"
-    r"bitrate=\s*(?P<bitrate>[\d\.]+)kbits/s\s+"
+    r".*?"
     r"speed=\s*(?P<speed>[\d\.]+)x"
 )
 
@@ -156,20 +199,51 @@ def time_str_to_seconds(time_str):
     try:
         parts = time_str.split(':')
         seconds = float(parts[-1])
-        if len(parts) > 1:
-            seconds += int(parts[-2]) * 60
-        if len(parts) > 2:
-            seconds += int(parts[-3]) * 3600
+        if len(parts) > 1: seconds += int(parts[-2]) * 60
+        if len(parts) > 2: seconds += int(parts[-3]) * 3600
         return seconds
     except (ValueError, IndexError):
         return 0
     
 def resource_path(relative_path):
-    """ 获取资源的绝对路径, 适用于开发环境和 PyInstaller 打包环境 """
     try:
-        # PyInstaller 创建一个临时文件夹, 并将路径存储在 _MEIPASS 中
         base_path = sys._MEIPASS
     except Exception:
         base_path = os.path.abspath(".")
-
     return os.path.join(base_path, relative_path)
+
+def format_media_info(data):
+    try:
+        fmt = data.get('format', {})
+        filename = os.path.basename(fmt.get('filename', 'N/A'))
+        duration_sec = float(fmt.get('duration', 0))
+        duration_str = str(datetime.timedelta(seconds=int(duration_sec)))
+        bit_rate_kbps = int(float(fmt.get('bit_rate', 0)) / 1000)
+        info = f"""
+        <style>
+            b {{ color: #00aaff; }}
+            td {{ padding: 2px 8px 2px 0; vertical-align: top; }}
+        </style>
+        <table>
+            <tr><td><b>文件名:</b></td><td>{filename}</td></tr>
+            <tr><td><b>格式:</b></td><td>{fmt.get('format_long_name', 'N/A')}</td></tr>
+            <tr><td><b>时长:</b></td><td>{duration_str}</td></tr>
+            <tr><td><b>总比特率:</b></td><td>{bit_rate_kbps:.0f} kb/s</td></tr>
+        </table><hr>
+        """
+        for stream in data.get('streams', []):
+            stream_type = stream.get('codec_type')
+            info += f"<b>{stream_type.capitalize()} 流 #{stream.get('index')}:</b><br>"
+            info += "<table>"
+            if stream_type == 'video':
+                info += (f"<tr><td>&nbsp;&nbsp;编码:</td><td>{stream.get('codec_long_name', 'N/A')}</td></tr>"
+                         f"<tr><td>&nbsp;&nbsp;分辨率:</td><td>{stream.get('width')}x{stream.get('height')}</td></tr>"
+                         f"<tr><td>&nbsp;&nbsp;帧率:</td><td>{eval(stream.get('r_frame_rate', '0/1')):.2f} fps</td></tr>")
+            elif stream_type == 'audio':
+                info += (f"<tr><td>&nbsp;&nbsp;编码:</td><td>{stream.get('codec_long_name', 'N/A')}</td></tr>"
+                         f"<tr><td>&nbsp;&nbsp;采样率:</td><td>{stream.get('sample_rate')} Hz</td></tr>"
+                         f"<tr><td>&nbsp;&nbsp;通道:</td><td>{stream.get('channel_layout', 'N/A')}</td></tr>")
+            info += "</table><br>"
+        return info.strip().removesuffix("<br>")
+    except Exception as e:
+        return f"<font color='red'>格式化信息时出错: {e}</font>"
