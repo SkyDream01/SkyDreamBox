@@ -110,14 +110,24 @@
 
 ```
 SkyDreamBox/
+├── ui/
+│   ├── __init__.py
+│   ├── main_window_ui.py
+│   ├── video_tab_ui.py
+│   ├── audio_tab_ui.py
+│   ├── muxing_tab_ui.py
+│   ├── demuxing_tab_ui.py
+│   ├── common_ops_tab_ui.py
+│   └── pro_tab_ui.py
 ├── assets/
-│   └── logo.png         # 应用图标
-├── main.py              # 主程序入口，包含MainWindow
-├── ui_tabs.py           # 包含所有功能选项卡 (Tab) 的UI类
-├── process_handler.py   # 负责处理FFmpeg和ffprobe的外部进程
-├── utils.py             # 包含常量、样式表和辅助函数
-├── requirements.txt     # Python依赖列表
-└── README.md            # 本说明文件
+│   └── logo.png
+├── main.py
+├── ui_tabs.py
+├── process_handler.py
+├── utils.py
+├── about.py
+├── requirements.txt
+└── README.md
 ```
 
 
