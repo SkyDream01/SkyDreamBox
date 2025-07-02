@@ -10,18 +10,13 @@ import datetime
 # Constants and Configurations (常量与配置)
 # =============================================================================
 
-# --- 【修改】格式与编码器的映射关系 ---
-
-# 视频格式 -> 兼容的视频编码器列表
 VIDEO_FORMAT_CODECS = {
-    "mp4": ["libx264", "libx265", "h264_nvenc", "hevc_nvenc"],
+    "mp4": ["libx264", "libx265", "h264_nvenc", "hevc_nvenc", "copy"],
     "mkv": ["libx264", "libx265", "h264_nvenc", "hevc_nvenc", "vp9", "copy"],
     "avi": ["libx264", "mpeg4"],
-    "mov": ["libx264", "libx265", "h264_nvenc", "hevc_nvenc"],
-    "webm": ["vp9", "libvpx-vp9"]
+    "mov": ["libx264", "libx265", "h264_nvenc", "hevc_nvenc", "copy"],
+    "webm": ["vp9", "libvpx-vp9", "copy"]
 }
-
-# 视频格式 -> 兼容的音频编码器列表 (用于视频处理选项卡)
 AUDIO_CODECS_FOR_VIDEO_FORMAT = {
     "mp4": ["aac", "mp3", "alac", "copy"],
     "mkv": ["aac", "mp3", "flac", "opus", "copy"],
@@ -30,153 +25,195 @@ AUDIO_CODECS_FOR_VIDEO_FORMAT = {
     "webm": ["opus", "vorbis", "copy"]
 }
 
-# 音频格式 -> 兼容的音频编码器列表
+# --- MODIFIED START: 简化WAV的编码器并创建专用的位深映射 ---
 AUDIO_FORMAT_CODECS = {
     "mp3": ["libmp3lame"],
     "flac": ["flac"],
     "aac": ["aac"],
-    "wav": ["pcm_s16le (16-bit)", "pcm_s24le (24-bit)", "pcm_s32le (32-bit)", "pcm_u8 (8-bit)"],
+    "wav": ["pcm"], # WAV的编码器统一为PCM
     "opus": ["libopus"],
     "alac": ["alac"],
     "m4a": ["aac", "alac", "copy"]
 }
 
-# --- 原有常量列表 (现在由上面的映射关系动态生成) ---
-VIDEO_FORMATS = list(VIDEO_FORMAT_CODECS.keys())
-VIDEO_CODECS = sorted(list(set(codec for codecs in VIDEO_FORMAT_CODECS.values() for codec in codecs)))
-AUDIO_CODECS_VIDEO_TAB = sorted(list(set(codec for codecs in AUDIO_CODECS_FOR_VIDEO_FORMAT.values() for codec in codecs)))
-AUDIO_FORMATS = list(AUDIO_FORMAT_CODECS.keys())
-AUDIO_CODECS_AUDIO_TAB = sorted(list(set(codec for codecs in AUDIO_FORMAT_CODECS.values() for codec in codecs)))
+# 为WAV格式创建的位深选项到真实PCM编码器的映射
+WAV_BIT_DEPTH_CODECS = {
+    "16-bit (默认)": "pcm_s16le",
+    "24-bit": "pcm_s24le",
+    "32-bit": "pcm_s32le",
+    "8-bit": "pcm_u8"
+}
 
-# --- 其他常量 ---
-AUDIO_BITRATES = ["128k", "192k", "256k", "320k"]
+# 为其他非PCM格式定义的采样格式
+AUDIO_SAMPLE_FORMATS = {
+    "(默认)": None,
+    "16-bit": "s16",
+    "24-bit": "s32",
+    "32-bit (float)": "fltp"
+}
+# --- MODIFIED END ---
+
+VIDEO_FORMATS = list(VIDEO_FORMAT_CODECS.keys())
+AUDIO_FORMATS = list(AUDIO_FORMAT_CODECS.keys())
+AUDIO_BITRATES = ["128k", "192k", "256k", "320k", "(自定义)"]
 AUDIO_SAMPLE_RATES = ["(默认)", "24000", "44100", "48000", "96000", "192000"]
 SUBTITLE_FORMATS = "字幕文件 (*.srt *.ass *.ssa);;所有文件 (*)"
 DEFAULT_COMPRESSION_LEVEL = "5"
 
 
 # =============================================================================
-# Stylesheet (样式表)
+# Stylesheet
 # =============================================================================
 STYLESHEET = """
 QWidget {
-    background-color: #2e2e2e;
-    color: #e0e0e0;
+    background-color: #2c3e50;
+    color: #ecf0f1;
     font-family: 'Segoe UI', 'Microsoft YaHei', 'Arial';
-    font-size: 10pt;
+    font-size: 9pt;
 }
-QMainWindow {
-    background-color: #2e2e2e;
+QMainWindow, QDialog {
+    background-color: #2c3e50;
 }
 QGroupBox {
-    background-color: #383838;
-    border: 1px solid #555;
-    border-radius: 5px;
+    background-color: #34495e;
+    border: 1px solid #2c3e50;
+    border-radius: 4px;
     margin-top: 1ex;
-    padding: 10px;
+    padding: 5px;
 }
 QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top center;
-    padding: 0 3px;
-    background-color: #2e2e2e;
-    color: #e0e0e0;
+    padding: 1px 5px;
+    background-color: #1abc9c;
+    color: #ffffff;
+    border-radius: 4px;
+    font-weight: bold;
 }
 QTabWidget::pane {
-    border: 1px solid #555;
+    border: 1px solid #34495e;
     border-radius: 3px;
-    padding: 5px;
+    padding: 2px;
 }
 QTabBar::tab {
-    background: #383838;
-    border: 1px solid #555;
-    border-bottom-color: #383838;
+    background: #34495e;
+    border: 1px solid #2c3e50;
+    border-bottom: none;
     border-top-left-radius: 4px;
     border-top-right-radius: 4px;
-    min-width: 8ex;
-    padding: 8px 12px;
+    min-width: 6ex;
+    padding: 5px 8px;
+    margin-right: 2px;
+    color: #bdc3c7;
 }
 QTabBar::tab:selected, QTabBar::tab:hover {
-    background: #555;
+    background: #1abc9c;
+    color: #ffffff;
+    font-weight: bold;
 }
 QTabBar::tab:selected {
-    border-color: #777;
-    border-bottom-color: #555;
+    border-color: #16a085;
 }
-QLineEdit, QTextEdit, QComboBox {
-    background-color: #252525;
-    border: 1px solid #555;
-    padding: 5px;
-    border-radius: 3px;
+QLineEdit, QTextEdit, QComboBox, QSpinBox {
+    background-color: #2c3e50;
+    border: 1px solid #34495e;
+    padding: 3px;
+    border-radius: 4px;
+    color: #ecf0f1;
 }
-QLineEdit:focus, QTextEdit:focus, QComboBox:focus {
-    border: 1px solid #0078d7;
+QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QSpinBox:focus {
+    border: 1px solid #1abc9c;
+}
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 15px;
+    border-left-width: 1px;
+    border-left-color: #34495e;
+    border-left-style: solid;
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+}
+QComboBox QAbstractItemView {
+    background-color: #34495e;
+    selection-background-color: #1abc9c;
+    border-radius: 4px;
+    color: #ecf0f1;
 }
 QPushButton {
-    background-color: #0078d7;
+    background-color: #1abc9c;
     color: white;
     border: none;
-    padding: 8px 16px;
-    border-radius: 3px;
-    min-width: 100px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    min-width: 80px;
+    font-weight: bold;
 }
 QPushButton:hover {
-    background-color: #005a9e;
+    background-color: #1dd2af;
 }
 QPushButton:pressed {
-    background-color: #003e6e;
+    background-color: #16a085;
 }
 QPushButton:disabled {
-    background-color: #555;
-    color: #aaa;
+    background-color: #566573;
+    color: #aeb6bf;
 }
 QProgressBar {
-    border: 1px solid #555;
+    border: 1px solid #34495e;
     border-radius: 5px;
     text-align: center;
-    background-color: #252525;
-    color: #e0e0e0;
+    background-color: #2c3e50;
+    color: #ecf0f1;
+    font-weight: bold;
 }
 QProgressBar::chunk {
-    background-color: #0078d7;
+    background-color: #1abc9c;
     border-radius: 4px;
 }
 QLabel {
     background-color: transparent;
 }
-QComboBox::drop-down {
-    subcontrol-origin: padding;
-    subcontrol-position: top right;
-    width: 20px;
-    border-left-width: 1px;
-    border-left-color: #555;
-    border-left-style: solid;
-    border-top-right-radius: 3px;
-    border-bottom-right-radius: 3px;
-}
 #info_label {
-    background-color: #383838;
-    padding: 10px;
+    background-color: #34495e;
+    padding: 5px;
     border-radius: 5px;
-    border: 1px solid #555;
+    border: 1px solid #2c3e50;
 }
 #console {
-    background-color: #1e1e1e;
+    background-color: #1e2b36;
     color: #d4d4d4;
     font-family: 'Consolas', 'Courier New', monospace;
     border-radius: 5px;
 }
 QSplitter::handle {
-    background-color: #555;
+    background-color: #566573;
 }
 QSplitter::handle:hover {
-    background-color: #777;
+    background-color: #7f8c8d;
 }
 QSplitter::handle:vertical {
-    height: 4px;
+    height: 1px;
 }
 QScrollArea {
     border: none;
+}
+QMenuBar {
+    background-color: #34495e;
+}
+QMenuBar::item {
+    padding: 4px 8px;
+    background: transparent;
+}
+QMenuBar::item:selected {
+    background: #1abc9c;
+}
+QMenu {
+    background-color: #34495e;
+    border: 1px solid #1abc9c;
+}
+QMenu::item:selected {
+    background-color: #1abc9c;
 }
 """
 
@@ -204,7 +241,7 @@ def time_str_to_seconds(time_str):
         return seconds
     except (ValueError, IndexError):
         return 0
-    
+
 def resource_path(relative_path):
     try:
         base_path = sys._MEIPASS
@@ -221,7 +258,7 @@ def format_media_info(data):
         bit_rate_kbps = int(float(fmt.get('bit_rate', 0)) / 1000)
         info = f"""
         <style>
-            b {{ color: #00aaff; }}
+            b {{ color: #1abc9c; }}
             td {{ padding: 2px 8px 2px 0; vertical-align: top; }}
         </style>
         <table>
@@ -246,4 +283,4 @@ def format_media_info(data):
             info += "</table><br>"
         return info.strip().removesuffix("<br>")
     except Exception as e:
-        return f"<font color='red'>格式化信息时出错: {e}</font>"
+        return f"<font color='#f1c40f'>格式化信息时出错: {e}</font>"

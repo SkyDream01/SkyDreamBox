@@ -26,7 +26,7 @@ class AboutWindow(QDialog):
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(15)
+        main_layout.setSpacing(10)
 
         # --- Logo 和标题 ---
         header_widget = QWidget()
@@ -57,13 +57,13 @@ class AboutWindow(QDialog):
 
         # 创建并添加标签
         info_layout.addWidget(self._create_info_label("版本:"), 0, 0, Qt.AlignRight)
-        info_layout.addWidget(QLabel("1.2"), 0, 1)
+        info_layout.addWidget(QLabel("2.0"), 0, 1)
 
         info_layout.addWidget(self._create_info_label("作者:"), 1, 0, Qt.AlignRight)
         info_layout.addWidget(QLabel("Tensin"), 1, 1)
 
         info_layout.addWidget(self._create_info_label("仓库:"), 2, 0, Qt.AlignRight)
-        github_label = QLabel('<a href="https://github.com/SkyDream01/SkyDreamBox">GitHub</a>')
+        github_label = QLabel('<a href="https://github.com/SkyDream01/SkyDreamBox" style="color:#1abc9c;">GitHub</a>')
         github_label.setOpenExternalLinks(True) # 允许打开外部链接
         info_layout.addWidget(github_label, 2, 1)
         
@@ -84,23 +84,24 @@ class AboutWindow(QDialog):
         button_layout.addWidget(close_button, 0, Qt.AlignCenter)
         main_layout.addWidget(button_container)
 
+        # 使用主样式表，但可在此处添加特定样式
         self.setStyleSheet("""
             QDialog {
-                background-color: #3c3c3c;
+                background-color: #34495e;
             }
             #aboutTitle {
                 font-size: 16pt;
                 font-weight: bold;
-                color: #00aaff;
+                color: #ffffff;
                 padding-top: 5px;
             }
             QLabel {
                 font-size: 10pt;
-                color: #e0e0e0;
+                color: #ecf0f1;
             }
             #infoLabel {
                 font-weight: bold;
-                color: #a0a0a0;
+                color: #bdc3c7;
             }
             QPushButton {
                 min-width: 120px;
