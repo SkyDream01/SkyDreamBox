@@ -5,20 +5,20 @@ import sys
 import os
 import json
 import datetime
+import time 
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QFileDialog, QLabel, QTabWidget, QTextEdit, QProgressBar, QStyle, QSplitter,
-    QScrollArea, QMessageBox, QAction
+    QScrollArea, QMessageBox, QAction, QSplashScreen 
 )
 from PyQt5.QtCore import QProcess, QTextCodec, Qt, QTimer
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QIcon, QPixmap
 
 from process_handler import ProcessHandler
 from ui_tabs import (
     VideoTab, AudioTab, MuxingTab, DemuxingTab, CommonOperationsTab, ProfessionalTab
 )
-# 【代码修改】从 about.py 导入 AboutWindow
 from about import AboutWindow
 from utils import STYLESHEET, PROGRESS_RE, time_str_to_seconds, resource_path, format_media_info
 
@@ -26,17 +26,24 @@ from utils import STYLESHEET, PROGRESS_RE, time_str_to_seconds, resource_path, f
 # Main Application Window (主程序窗口)
 # =============================================================================
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, splash=None):
         super().__init__()
         
+        self.splash = splash
+        
+        self.update_splash("正在初始化组件...")
+
         self.process_handler = ProcessHandler(self)
+        
+        self.update_splash("正在检查核心组件 FFmpeg...")
         is_ffmpeg_ready, message = self.process_handler.check_ffmpeg()
         if not is_ffmpeg_ready:
-            self.setWindowTitle("错误") 
+            self.setWindowTitle("错误")
             self._show_ffmpeg_error_and_exit(message)
             QTimer.singleShot(100, self.close)
             return
 
+        self.update_splash("正在加载应用图标...")
         logo_path = resource_path("assets/logo.png")
         if os.path.exists(logo_path):
             self.setWindowIcon(QIcon(logo_path))
@@ -52,11 +59,24 @@ class MainWindow(QMainWindow):
         self.all_tabs = []
         self.total_duration_sec = 0
         self.last_progress_text = ""
+        
+        self.update_splash("正在构建用户界面...")
         self._setup_ui()
+        
+        self.update_splash("正在连接信号与槽...")
         self._connect_signals()
         
-        # 【代码修改】初始化关于窗口变量
         self.about_window = None
+
+        self.update_splash("初始化完成!", 100)
+
+    def update_splash(self, message, progress=None):
+        if self.splash:
+            self.splash.showMessage(message, Qt.AlignBottom | Qt.AlignHCenter, Qt.white)
+            if progress is not None:
+                time.sleep(0.5) 
+            QApplication.processEvents()
+
 
     def _show_ffmpeg_error_and_exit(self, message):
         error_box = QMessageBox(self)
@@ -67,7 +87,6 @@ class MainWindow(QMainWindow):
         error_box.exec_()
 
     def _setup_ui(self):
-        # 【代码修改】创建菜单栏
         self._create_menu_bar()
 
         main_widget = QWidget()
@@ -131,7 +150,6 @@ class MainWindow(QMainWindow):
         splitter.setSizes([600, 250])
         main_layout.addWidget(splitter)
 
-    # 【代码修改】新增创建菜单栏的方法
     def _create_menu_bar(self):
         menu_bar = self.menuBar()
         help_menu = menu_bar.addMenu("帮助")
@@ -140,12 +158,10 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self._show_about_dialog)
         help_menu.addAction(about_action)
 
-    # 【代码修改】新增显示“关于”对话框的方法
     def _show_about_dialog(self):
-        # 确保只创建一个实例
         if self.about_window is None:
             self.about_window = AboutWindow(self)
-        self.about_window.exec_() # 使用 exec_() 以模态方式显示
+        self.about_window.exec_()
 
     def _connect_signals(self):
         self.process_handler.ffmpeg_process.readyReadStandardOutput.connect(self._handle_stdout)
@@ -254,7 +270,7 @@ class MainWindow(QMainWindow):
 
         if self.total_duration_sec <= 0:
             self.progress_status_label.setText("正在处理 (时长未知)...")
-            return 
+            return
 
         data = match.groupdict()
         current_time_sec = time_str_to_seconds(data.get('time', '0'))
@@ -289,10 +305,22 @@ if __name__ == '__main__':
     app.setStyleSheet(STYLESHEET)
     QTextCodec.setCodecForLocale(QTextCodec.codecForName("UTF-8"))
     
-    main_win = MainWindow()
+    # --- 【代码修改】创建和显示启动画面，并设置大小 ---
+    logo_path = resource_path("assets/logo.png")
+    pixmap = QPixmap(logo_path)
+    # 将图片缩放至 500x500
+    scaled_pixmap = pixmap.scaled(500, 500, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    splash = QSplashScreen(scaled_pixmap, Qt.WindowStaysOnTopHint)
+    splash.show()
+    # ------------------------------------
+
+    main_win = MainWindow(splash)
     
     if not main_win.centralWidget():
         sys.exit(1)
     
     main_win.show()
+    
+    splash.finish(main_win)
+    
     sys.exit(app.exec_())
