@@ -57,7 +57,7 @@ class AboutWindow(QDialog):
 
         # 创建并添加标签
         info_layout.addWidget(self._create_info_label("版本:"), 0, 0, Qt.AlignRight)
-        info_layout.addWidget(QLabel("2.0"), 0, 1)
+        info_layout.addWidget(QLabel("2.1"), 0, 1)
 
         info_layout.addWidget(self._create_info_label("作者:"), 1, 0, Qt.AlignRight)
         info_layout.addWidget(QLabel("Tensin"), 1, 1)

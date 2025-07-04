@@ -236,7 +236,7 @@ if __name__ == '__main__':
     logo_path = resource_path("assets/logo.png")
     icon_pixmap = QPixmap(logo_path)
     
-    app_version = "2.0"
+    app_version = "2.1"
     splash = CustomSplashScreen(icon_pixmap, app_version)
     splash.show()
 
