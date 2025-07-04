@@ -16,7 +16,7 @@ from ui.pro_tab_ui import Ui_ProfessionalTab
 from utils import (
     VIDEO_FORMATS, VIDEO_FORMAT_CODECS, AUDIO_CODECS_FOR_VIDEO_FORMAT,
     AUDIO_BITRATES, AUDIO_FORMATS, AUDIO_FORMAT_CODECS, AUDIO_SAMPLE_RATES,
-    WAV_BIT_DEPTH_CODECS, AUDIO_SAMPLE_FORMATS, # <-- 确认导入了正确的常量
+    WAV_BIT_DEPTH_CODECS, AUDIO_SAMPLE_FORMATS,
     SUBTITLE_FORMATS, DEFAULT_COMPRESSION_LEVEL
 )
 
@@ -24,7 +24,6 @@ from utils import (
 
 def validate_time_format(time_str):
     if not time_str: return True
-    # 支持 HH:MM:SS 和 HH:MM:SS.ms 格式
     return re.fullmatch(r'\d{1,2}:\d{2}:\d{2}(\.\d+)?', time_str) is not None
 
 def validate_crf(crf_str):
@@ -126,7 +125,6 @@ class VideoTab(BaseTab, Ui_VideoTab):
 
     def _update_video_options_visibility(self):
         codec = self.video_codec_combo.currentText()
-        # CRF is typically for libx264/libx265, bitrate for others
         is_crf_visible = "libx" in codec
         self.crf_edit.setVisible(is_crf_visible)
         self.video_bitrate_edit.setVisible(not is_crf_visible and codec != 'copy')
@@ -170,11 +168,9 @@ class VideoTab(BaseTab, Ui_VideoTab):
         
         subtitle_file = self.subtitle_edit.text()
         if subtitle_file:
-            # For hardcoding subtitles
             escaped_subtitle_path = subtitle_file.replace(':', '\\\\:')
             command.extend(["-vf", f"subtitles={escaped_subtitle_path}"])
 
-        # Video options
         video_codec = self.video_codec_combo.currentText()
         command.extend(["-c:v", video_codec])
         if video_codec != 'copy':
@@ -187,7 +183,6 @@ class VideoTab(BaseTab, Ui_VideoTab):
             if self.resolution_edit.text():
                 command.extend(["-s", self.resolution_edit.text()])
 
-        # Audio options
         audio_codec = self.audio_codec_combo.currentText()
         command.extend(["-c:a", audio_codec])
         if audio_codec != 'copy' and self.audio_bitrate_combo.isVisible() and self.audio_bitrate_combo.currentText():
@@ -221,12 +216,10 @@ class AudioTab(BaseTab, Ui_AudioTab):
         self._on_audio_format_changed(self.format_combo.currentText())
 
     def _on_audio_format_changed(self, a_format):
-        # 填充编码器列表
         self.codec_combo.clear()
         codecs = AUDIO_FORMAT_CODECS.get(a_format, [])
         self.codec_combo.addItems(codecs)
 
-        # 动态填充位深/采样格式选项
         self.bit_depth_combo.clear()
         if a_format == 'wav':
             self.bit_depth_combo.addItems(WAV_BIT_DEPTH_CODECS.keys())
@@ -246,24 +239,20 @@ class AudioTab(BaseTab, Ui_AudioTab):
         is_flac = codec == 'flac'
         is_wav = a_format == 'wav'
 
-        # 对'copy'模式禁用所有参数设置
         self.sample_rate_combo.setEnabled(not is_copy)
         self.bit_depth_combo.setEnabled(not is_copy)
         self.bitrate_combo.setEnabled(not is_copy)
         self.bitrate_custom_edit.setEnabled(not is_copy)
         self.compression_combo.setEnabled(not is_copy)
 
-        # 比特率选项仅对有损格式可见
         self.bitrate_label.setVisible(is_lossy)
         self.bitrate_combo.setVisible(is_lossy)
         is_custom_bitrate = self.bitrate_combo.currentText() == "(自定义)" and is_lossy
         self.bitrate_custom_edit.setVisible(is_custom_bitrate)
 
-        # 压缩等级仅对FLAC可见
         self.compression_label.setVisible(is_flac)
         self.compression_combo.setVisible(is_flac)
         
-        # 位深/采样格式对所有非copy编码器可见，并更新标签
         self.bit_depth_label.setVisible(not is_copy)
         self.bit_depth_combo.setVisible(not is_copy)
         self.bit_depth_label.setText("位深:" if is_wav else "采样格式:")
@@ -297,18 +286,14 @@ class AudioTab(BaseTab, Ui_AudioTab):
         codec = self.codec_combo.currentText()
         if not codec: raise ValueError("未选择任何有效的编码器")
         
-        # --- 核心逻辑：根据格式确定编码器和参数 ---
         if a_format == 'wav':
-            # 对于WAV，编码器由位深决定
             bit_depth_text = self.bit_depth_combo.currentText()
             wav_codec = WAV_BIT_DEPTH_CODECS.get(bit_depth_text, "pcm_s16le")
             command.extend(["-c:a", wav_codec])
         else:
-            # 对于其他格式
             command.extend(["-c:a", codec])
 
             if codec != 'copy':
-                # 设置比特率 (仅对有损格式)
                 if self.bitrate_label.isVisible():
                     bitrate = self.bitrate_combo.currentText()
                     if bitrate == "(自定义)":
@@ -316,17 +301,14 @@ class AudioTab(BaseTab, Ui_AudioTab):
                     if bitrate:
                         command.extend(["-b:a", bitrate])
                 
-                # 设置FLAC压缩等级
                 if self.compression_label.isVisible():
                     command.extend(["-compression_level", self.compression_combo.currentText()])
 
-                # 设置采样格式 (对非WAV、非copy格式)
                 sample_fmt_text = self.bit_depth_combo.currentText()
                 sample_fmt = AUDIO_SAMPLE_FORMATS.get(sample_fmt_text)
                 if sample_fmt:
                     command.extend(["-sample_fmt", sample_fmt])
 
-        # 对所有非copy格式，都可以设置采样率
         if codec != 'copy':
             sample_rate = self.sample_rate_combo.currentText()
             if sample_rate and sample_rate != "(默认)":
@@ -378,15 +360,12 @@ class MuxingTab(BaseTab, Ui_MuxingTab):
         if subtitle_file:
             command.extend(["-i", subtitle_file])
         
-        # Map streams: 0:v (video from first input), 1:a (audio from second), etc.
         command.extend(["-map", "0:v:0", "-map", "1:a:0"])
         if subtitle_file:
             command.extend(["-map", "2:s:0"])
         
-        # Copy codecs without re-encoding, and handle subtitle codec
         command.extend(["-c:v", "copy", "-c:a", "copy"])
         if subtitle_file:
-            # For mkv, use copy. For mp4, convert to mov_text.
             if output_file.endswith('.mp4'):
                 command.extend(["-c:s", "mov_text"])
             else:
@@ -428,8 +407,6 @@ class DemuxingTab(BaseTab, Ui_DemuxingTab):
             output_file = f"{base}_video_only{ext}"
             return ["ffmpeg", "-i", input_file, "-c:v", "copy", "-an", "-y", output_file]
         elif self.current_stream_type == 'audio':
-            # Try to guess a reasonable extension, default to .mka
-            # This requires ffprobe, for simplicity we'll just use a generic name for now.
             output_file = f"{base}_audio_only.mka"
             return ["ffmpeg", "-i", input_file, "-c:a", "copy", "-vn", "-y", output_file]
         return None
@@ -442,12 +419,10 @@ class CommonOperationsTab(BaseTab, Ui_CommonOpsTab):
         self.current_command_type = None
 
     def _connect_signals(self):
-        # Trim
         self.select_trim_input_button.clicked.connect(lambda: self.main_window.select_file(self.trim_input_edit))
         self.select_trim_output_button.clicked.connect(self.select_trim_output_path)
         self.trim_button.clicked.connect(lambda: self._run_specific_command('trim'))
         
-        # Image + Audio
         self.select_img_button.clicked.connect(self.select_image_file)
         self.select_audio_button.clicked.connect(lambda: self.main_window.select_file(self.audio_input_edit))
         self.select_img_audio_output_button.clicked.connect(self.select_img_audio_output_path)
@@ -495,37 +470,35 @@ class CommonOperationsTab(BaseTab, Ui_CommonOpsTab):
         return True
 
     def _get_command(self):
-        input_file, output_file = self.input_edit.text(), self.output_edit.text()
-        command = ["ffmpeg", "-i", input_file]
-        
-        subtitle_file = self.subtitle_edit.text()
-        if subtitle_file:
-            # 为防止 Windows 路径中的冒号 (如 C:) 与 FFmpeg 滤镜语法冲突，需要对其进行转义。
-            # 将替换操作移出 f-string，以兼容旧版 Python。
-            escaped_subtitle_path = subtitle_file.replace(':', '\\:')
-            command.extend(["-vf", f"subtitles={escaped_subtitle_path}"])
+        # 修复: 为 "常用操作" 选项卡实现正确的命令构建逻辑
+        if self.current_command_type == 'trim':
+            input_file = self.trim_input_edit.text()
+            output_file = self.trim_output_edit.text()
+            start_time = self.start_time_edit.text()
+            end_time = self.end_time_edit.text()
 
-        # Video options
-        video_codec = self.video_codec_combo.currentText()
-        command.extend(["-c:v", video_codec])
-        if video_codec != 'copy':
-            if self.crf_edit.isVisible() and self.crf_edit.text():
-                command.extend(["-crf", self.crf_edit.text()])
-            if self.video_bitrate_edit.isVisible() and self.video_bitrate_edit.text():
-                command.extend(["-b:v", self.video_bitrate_edit.text()])
-            if self.fps_edit.text():
-                command.extend(["-r", self.fps_edit.text()])
-            if self.resolution_edit.text():
-                command.extend(["-s", self.resolution_edit.text()])
+            command = ["ffmpeg", "-i", input_file, "-c", "copy"]
+            if start_time and start_time != '00:00:00':
+                command.extend(["-ss", start_time])
+            if end_time:
+                command.extend(["-to", end_time])
+            command.extend(["-y", output_file])
+            return command
 
-        # Audio options
-        audio_codec = self.audio_codec_combo.currentText()
-        command.extend(["-c:a", audio_codec])
-        if audio_codec != 'copy' and self.audio_bitrate_combo.isVisible() and self.audio_bitrate_combo.currentText():
-            command.extend(["-b:a", self.audio_bitrate_combo.currentText()])
-        
-        command.extend(["-y", output_file])
-        return command
+        elif self.current_command_type == 'img_audio':
+            img_file = self.img_input_edit.text()
+            audio_file = self.audio_input_edit.text()
+            output_file = self.img_audio_output_edit.text()
+            
+            command = [
+                "ffmpeg", "-loop", "1", "-i", img_file,
+                "-i", audio_file,
+                "-c:v", "libx264", "-tune", "stillimage",
+                "-c:a", "aac", "-b:a", "192k",
+                "-shortest", "-y", output_file
+            ]
+            return command
+        return None
 
 class ProfessionalTab(BaseTab, Ui_ProfessionalTab):
     def __init__(self, main_window):
@@ -543,7 +516,6 @@ class ProfessionalTab(BaseTab, Ui_ProfessionalTab):
         return True
 
     def _get_command(self):
-        # Split command by spaces, but handle quoted parts correctly
         command_text = self.command_input.toPlainText().strip()
         try:
             import shlex
