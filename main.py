@@ -50,7 +50,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.setWindowIcon(QIcon(logo_path))
 
         self.setWindowTitle("天梦工具箱 (SkyDreamBox)")
-        self.setGeometry(100, 100, 500, 600)
+        self.setGeometry(50, 50, 500, 600)
 
         self.initialized_tabs = {}
         self.tab_constructors = {

@@ -53,13 +53,22 @@ class Ui_VideoTab:
         video_grid = QGridLayout()
         video_grid.setSpacing(10)
         self.crf_edit = QLineEdit(); self.crf_edit.setPlaceholderText("e.g., 23 (推荐)")
+        self.cq_edit = QLineEdit(); self.cq_edit.setPlaceholderText("e.g., 23 (推荐)")
         self.fps_edit = QLineEdit(); self.fps_edit.setPlaceholderText("可选, e.g., 30")
         self.resolution_edit = QLineEdit(); self.resolution_edit.setPlaceholderText("可选, e.g., 1920x1080")
         self.video_bitrate_edit = QLineEdit(); self.video_bitrate_edit.setPlaceholderText("可选, e.g., 2000k")
-        video_grid.addWidget(QLabel("CRF:"), 0, 0); video_grid.addWidget(self.crf_edit, 0, 1)
-        video_grid.addWidget(QLabel("FPS:"), 0, 2); video_grid.addWidget(self.fps_edit, 0, 3)
-        video_grid.addWidget(QLabel("分辨率:"), 1, 0); video_grid.addWidget(self.resolution_edit, 1, 1)
-        video_grid.addWidget(QLabel("视频比特率:"), 1, 2); video_grid.addWidget(self.video_bitrate_edit, 1, 3)
+
+        self.crf_label = QLabel("CRF:")
+        self.cq_label = QLabel("CQ:")
+        self.video_bitrate_label = QLabel("视频比特率:")
+
+        video_grid.addWidget(self.crf_label, 0, 0); video_grid.addWidget(self.crf_edit, 0, 1)
+        video_grid.addWidget(self.cq_label, 0, 2); video_grid.addWidget(self.cq_edit, 0, 3)
+        video_grid.addWidget(QLabel("FPS:"), 1, 0); video_grid.addWidget(self.fps_edit, 1, 1)
+        video_grid.addWidget(QLabel("分辨率:"), 1, 2); video_grid.addWidget(self.resolution_edit, 1, 3)
+        video_grid.addWidget(self.video_bitrate_label, 2, 0)
+        video_grid.addWidget(self.video_bitrate_edit, 2, 1, 1, 3)
+
 
         video_layout.addLayout(codec_v_layout)
         video_layout.addLayout(video_grid)

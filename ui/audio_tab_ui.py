@@ -59,15 +59,7 @@ class Ui_AudioTab:
         self.bitrate_label = QLabel("音频比特率:")
         options_layout.addWidget(self.bitrate_label, 1, 2)
         self.bitrate_combo = QComboBox()
-        self.bitrate_custom_edit = QLineEdit()
-        self.bitrate_custom_edit.setPlaceholderText("例如: 256k")
-        # 将比特率下拉菜单和自定义输入框放在一个水平布局中
-        bitrate_hbox = QHBoxLayout()
-        bitrate_hbox.setContentsMargins(0,0,0,0)
-        bitrate_hbox.addWidget(self.bitrate_combo, 2)
-        bitrate_hbox.addWidget(self.bitrate_custom_edit, 1)
-        options_layout.addLayout(bitrate_hbox, 1, 3)
-
+        options_layout.addWidget(self.bitrate_combo, 1, 3)
 
         self.compression_label = QLabel("压缩等级:")
         options_layout.addWidget(self.compression_label, 2, 2)

@@ -30,6 +30,10 @@ def validate_crf(crf_str):
     if not crf_str: return True
     return crf_str.isdigit() and 0 <= int(crf_str) <= 51
 
+def validate_cq(cq_str):
+    if not cq_str: return True
+    return cq_str.isdigit() and 0 <= int(cq_str) <= 51
+
 def validate_fps(fps_str):
     if not fps_str: return True
     try:
@@ -126,8 +130,17 @@ class VideoTab(BaseTab, Ui_VideoTab):
     def _update_video_options_visibility(self):
         codec = self.video_codec_combo.currentText()
         is_crf_visible = "libx" in codec
+        is_cq_visible = "nvenc" in codec
+
+        self.crf_label.setVisible(is_crf_visible)
         self.crf_edit.setVisible(is_crf_visible)
-        self.video_bitrate_edit.setVisible(not is_crf_visible and codec != 'copy')
+
+        self.cq_label.setVisible(is_cq_visible)
+        self.cq_edit.setVisible(is_cq_visible)
+
+        is_bitrate_visible = codec != 'copy'
+        self.video_bitrate_label.setVisible(is_bitrate_visible)
+        self.video_bitrate_edit.setVisible(is_bitrate_visible)
 
     def _validate_inputs(self):
         if not self.input_edit.text() or not os.path.exists(self.input_edit.text()):
@@ -136,6 +149,8 @@ class VideoTab(BaseTab, Ui_VideoTab):
             display_error(self.console, "输出文件路径不能为空。"); return False
         if self.crf_edit.isVisible() and not validate_crf(self.crf_edit.text()):
             display_error(self.console, f"无效的CRF值: {self.crf_edit.text()} (应为0-51的整数)"); return False
+        if self.cq_edit.isVisible() and not validate_cq(self.cq_edit.text()):
+            display_error(self.console, f"无效的CQ值: {self.cq_edit.text()} (应为0-51的整数)"); return False
         if not validate_fps(self.fps_edit.text()):
             display_error(self.console, f"无效的FPS值: {self.fps_edit.text()}"); return False
         if not validate_resolution(self.resolution_edit.text()):
@@ -176,6 +191,8 @@ class VideoTab(BaseTab, Ui_VideoTab):
         if video_codec != 'copy':
             if self.crf_edit.isVisible() and self.crf_edit.text():
                 command.extend(["-crf", self.crf_edit.text()])
+            if self.cq_edit.isVisible() and self.cq_edit.text():
+                command.extend(["-cq", self.cq_edit.text()])
             if self.video_bitrate_edit.isVisible() and self.video_bitrate_edit.text():
                 command.extend(["-b:v", self.video_bitrate_edit.text()])
             if self.fps_edit.text():
@@ -242,13 +259,10 @@ class AudioTab(BaseTab, Ui_AudioTab):
         self.sample_rate_combo.setEnabled(not is_copy)
         self.bit_depth_combo.setEnabled(not is_copy)
         self.bitrate_combo.setEnabled(not is_copy)
-        self.bitrate_custom_edit.setEnabled(not is_copy)
         self.compression_combo.setEnabled(not is_copy)
 
         self.bitrate_label.setVisible(is_lossy)
         self.bitrate_combo.setVisible(is_lossy)
-        is_custom_bitrate = self.bitrate_combo.currentText() == "(自定义)" and is_lossy
-        self.bitrate_custom_edit.setVisible(is_custom_bitrate)
 
         self.compression_label.setVisible(is_flac)
         self.compression_combo.setVisible(is_flac)
@@ -274,8 +288,6 @@ class AudioTab(BaseTab, Ui_AudioTab):
             display_error(self.console, "输入音频文件不存在或未指定。"); return False
         if not self.output_edit.text():
             display_error(self.console, "输出文件路径不能为空。"); return False
-        if self.bitrate_custom_edit.isVisible() and not validate_bitrate(self.bitrate_custom_edit.text()):
-            display_error(self.console, f"无效的自定义比特率: {self.bitrate_custom_edit.text()}"); return False
         return True
 
     def _get_command(self):
@@ -296,8 +308,6 @@ class AudioTab(BaseTab, Ui_AudioTab):
             if codec != 'copy':
                 if self.bitrate_label.isVisible():
                     bitrate = self.bitrate_combo.currentText()
-                    if bitrate == "(自定义)":
-                        bitrate = self.bitrate_custom_edit.text()
                     if bitrate:
                         command.extend(["-b:a", bitrate])
                 
@@ -470,7 +480,6 @@ class CommonOperationsTab(BaseTab, Ui_CommonOpsTab):
         return True
 
     def _get_command(self):
-        # 修复: 为 "常用操作" 选项卡实现正确的命令构建逻辑
         if self.current_command_type == 'trim':
             input_file = self.trim_input_edit.text()
             output_file = self.trim_output_edit.text()
