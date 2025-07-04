@@ -11,7 +11,7 @@ class CustomSplashScreen(QSplashScreen):
     """
     自定义启动画面，具有纯色背景和独立的Logo图标。
     """
-    def __init__(self, icon_pixmap: QPixmap, version="", width=450, height=350):
+    def __init__(self, icon_pixmap: QPixmap, app_name="", version="", width=450, height=350):
         # 创建一个透明的父级Pixmap，因为我们将通过样式表控制背景
         super().__init__(QPixmap(width, height))
         self.setWindowFlag(Qt.FramelessWindowHint) # 确保无边框
@@ -34,7 +34,7 @@ class CustomSplashScreen(QSplashScreen):
         icon_label.setAlignment(Qt.AlignCenter)
         
         # --- 2. 标题和版本号 ---
-        title_label = QLabel("天梦工具箱")
+        title_label = QLabel(app_name)
         title_label.setObjectName("splashTitle")
         title_label.setAlignment(Qt.AlignCenter)
         

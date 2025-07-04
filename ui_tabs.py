@@ -4,6 +4,9 @@
 import os
 import re
 from PyQt5.QtWidgets import QWidget, QFileDialog
+from PyQt5.QtGui import QPixmap
+from PyQt5.QtCore import Qt
+
 
 # 引入 UI 定义
 from ui.video_tab_ui import Ui_VideoTab
@@ -12,6 +15,7 @@ from ui.muxing_tab_ui import Ui_MuxingTab
 from ui.demuxing_tab_ui import Ui_DemuxingTab
 from ui.common_ops_tab_ui import Ui_CommonOpsTab
 from ui.pro_tab_ui import Ui_ProfessionalTab
+from ui.about_tab_ui import Ui_AboutTab # 导入新的 AboutTab UI
 
 from utils import (
     VIDEO_FORMATS, VIDEO_FORMAT_CODECS, AUDIO_CODECS_FOR_VIDEO_FORMAT,
@@ -19,6 +23,7 @@ from utils import (
     WAV_BIT_DEPTH_CODECS, AUDIO_SAMPLE_FORMATS,
     SUBTITLE_FORMATS, DEFAULT_COMPRESSION_LEVEL
 )
+# constants 和 resource_path 不再在此文件中直接使用，可以移除
 
 # --- Helper Functions ---
 
@@ -531,3 +536,13 @@ class ProfessionalTab(BaseTab, Ui_ProfessionalTab):
             return shlex.split(command_text)
         except ImportError:
             return command_text.split()
+
+# --- 修改后的 AboutTab ---
+class AboutTab(BaseTab, Ui_AboutTab):
+    def __init__(self, main_window):
+        super().__init__(main_window)
+        self.setupUi(self)
+
+    def set_buttons_enabled(self, enabled):
+        # 此选项卡没有需要禁用的按钮
+        pass

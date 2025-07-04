@@ -11,8 +11,8 @@ class Ui_MainWindow:
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
 
-        # 创建菜单栏
-        self._create_menu_bar(MainWindow)
+        # 菜单栏已被移除
+        # self._create_menu_bar(MainWindow) 
 
         self.central_widget = QWidget(MainWindow)
         MainWindow.setCentralWidget(self.central_widget)
@@ -77,9 +77,4 @@ class Ui_MainWindow:
         self.splitter.setSizes([550, 200]) # MODIFIED
         self.main_layout.addWidget(self.splitter)
 
-    def _create_menu_bar(self, MainWindow):
-        # QMainWindow 会自动创建 menuBar，我们只需获取并添加菜单
-        menu_bar = MainWindow.menuBar()
-        help_menu = menu_bar.addMenu("帮助")
-        self.about_action = QAction("关于", MainWindow)
-        help_menu.addAction(self.about_action)
+    # _create_menu_bar 方法已被移除

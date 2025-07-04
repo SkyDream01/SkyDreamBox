@@ -14,13 +14,13 @@ from PyQt5.QtCore import QProcess, QTextCodec, Qt, QTimer
 from PyQt5.QtGui import QIcon, QPixmap
 
 # --- UI 和逻辑分离 ---
+from constants import APP_NAME, APP_VERSION, AUTHOR, GITHUB_URL
 from ui.main_window_ui import Ui_MainWindow
 from ui.splash_screen_ui import CustomSplashScreen
 from process_handler import ProcessHandler
 from ui_tabs import (
-    VideoTab, AudioTab, MuxingTab, DemuxingTab, CommonOperationsTab, ProfessionalTab
+    VideoTab, AudioTab, MuxingTab, DemuxingTab, CommonOperationsTab, ProfessionalTab, AboutTab
 )
-from about import AboutWindow
 from utils import (
     STYLESHEET, PROGRESS_RE, time_str_to_seconds, resource_path, format_media_info
 )
@@ -49,18 +49,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if os.path.exists(logo_path):
             self.setWindowIcon(QIcon(logo_path))
 
-        self.setWindowTitle("天梦工具箱 (SkyDreamBox)")
+        self.setWindowTitle(APP_NAME)
         self.setGeometry(50, 50, 500, 600)
 
         self.initialized_tabs = {}
         self.tab_constructors = {
             "视频处理": VideoTab, "音频处理": AudioTab, "封装合并": MuxingTab,
             "抽取音视频": DemuxingTab, "常用操作": CommonOperationsTab, "专业命令": ProfessionalTab,
+            "关于": AboutTab
         }
         
         self.total_duration_sec = 0
         self.last_progress_text = ""
-        self.about_window = None
 
         self.update_splash("正在构建用户界面...", 70)
         self._setup_tabs()
@@ -99,7 +99,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             constructor = self.tab_constructors[tab_name]
             tab_widget = constructor(self)
             
-            # 修复: 在设置当前索引之前就将选项卡标记为“已初始化”以防止递归
             self.initialized_tabs[index] = tab_widget
             
             self.tabs.removeTab(index)
@@ -111,14 +110,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.process_handler.ffmpeg_process.readyReadStandardError.connect(self._handle_stderr)
         self.process_handler.ffmpeg_process.finished.connect(self._on_process_finished)
         self.process_handler.ffprobe_process.finished.connect(self._on_probe_finished)
-        self.about_action.triggered.connect(self._show_about_dialog)
+        # --- FIX: The line below was removed as self.about_action no longer exists ---
+        # self.about_action.triggered.connect(self._show_about_dialog)
         self.tabs.currentChanged.connect(self._initialize_tab)
         QTimer.singleShot(0, lambda: self._initialize_tab(0))
 
-    def _show_about_dialog(self):
-        if self.about_window is None:
-            self.about_window = AboutWindow(self)
-        self.about_window.exec_()
+    # The _show_about_dialog method should also be removed as it's no longer used.
 
     def switch_to_console_tab(self):
         self.info_console_tabs.setCurrentIndex(1)
@@ -236,8 +233,7 @@ if __name__ == '__main__':
     logo_path = resource_path("assets/logo.png")
     icon_pixmap = QPixmap(logo_path)
     
-    app_version = "2.1"
-    splash = CustomSplashScreen(icon_pixmap, app_version)
+    splash = CustomSplashScreen(icon_pixmap, app_name=APP_NAME, version=APP_VERSION)
     splash.show()
 
     main_win = MainWindow(splash)
