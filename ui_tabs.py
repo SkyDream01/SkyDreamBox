@@ -262,7 +262,6 @@ class AudioTab(BaseTab, Ui_AudioTab):
         is_wav = a_format == 'wav'
 
         self.sample_rate_combo.setEnabled(not is_copy)
-        self.bit_depth_combo.setEnabled(not is_copy)
         self.bitrate_combo.setEnabled(not is_copy)
         self.compression_combo.setEnabled(not is_copy)
 
@@ -272,9 +271,14 @@ class AudioTab(BaseTab, Ui_AudioTab):
         self.compression_label.setVisible(is_flac)
         self.compression_combo.setVisible(is_flac)
         
-        self.bit_depth_label.setVisible(not is_copy)
-        self.bit_depth_combo.setVisible(not is_copy)
-        self.bit_depth_label.setText("位深:" if is_wav else "采样格式:")
+        # MODIFIED: For lossy codecs, bit depth is not applicable. Also hide for 'copy'
+        is_bit_depth_visible = not is_copy and not is_lossy
+        self.bit_depth_label.setVisible(is_bit_depth_visible)
+        self.bit_depth_combo.setVisible(is_bit_depth_visible)
+        self.bit_depth_combo.setEnabled(is_bit_depth_visible)
+
+        if is_bit_depth_visible:
+            self.bit_depth_label.setText("位深:" if is_wav else "采样格式:")
 
     def auto_set_output_path(self, input_path):
         if not input_path: return
@@ -311,18 +315,22 @@ class AudioTab(BaseTab, Ui_AudioTab):
             command.extend(["-c:a", codec])
 
             if codec != 'copy':
-                if self.bitrate_label.isVisible():
+                is_lossy = codec in ['libmp3lame', 'aac', 'opus', 'vorbis']
+
+                if self.bitrate_label.isVisible() and is_lossy:
                     bitrate = self.bitrate_combo.currentText()
                     if bitrate:
                         command.extend(["-b:a", bitrate])
                 
-                if self.compression_label.isVisible():
+                if self.compression_label.isVisible() and codec == 'flac':
                     command.extend(["-compression_level", self.compression_combo.currentText()])
 
-                sample_fmt_text = self.bit_depth_combo.currentText()
-                sample_fmt = AUDIO_SAMPLE_FORMATS.get(sample_fmt_text)
-                if sample_fmt:
-                    command.extend(["-sample_fmt", sample_fmt])
+                # MODIFIED: Only add sample format for non-lossy codecs
+                if not is_lossy:
+                    sample_fmt_text = self.bit_depth_combo.currentText()
+                    sample_fmt = AUDIO_SAMPLE_FORMATS.get(sample_fmt_text)
+                    if sample_fmt:
+                        command.extend(["-sample_fmt", sample_fmt])
 
         if codec != 'copy':
             sample_rate = self.sample_rate_combo.currentText()
