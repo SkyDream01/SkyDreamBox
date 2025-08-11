@@ -7,6 +7,24 @@ import os
 import datetime
 
 # =============================================================================
+# Helper Functions (辅助函数)
+# =============================================================================
+
+def resource_path(relative_path):
+    """
+    获取资源的绝对路径，兼容开发环境和 Nuitka/PyInstaller 打包后的环境。
+    这是解决单文件模式下资源找不到问题的关键函数。
+    """
+    try:
+        # 当程序被打包后，sys._MEIPASS 会指向解压后的临时文件夹
+        base_path = sys._MEIPASS
+    except AttributeError:
+        # 如果没有 _MEIPASS 属性，说明是在正常的开发环境中运行
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+# =============================================================================
 # Constants and Configurations (常量与配置)
 # =============================================================================
 
@@ -235,9 +253,6 @@ PROGRESS_RE = re.compile(
     r"speed=\s*(?P<speed>[\d\.]+)x"
 )
 
-# =============================================================================
-# Helper Functions (辅助函数)
-# =============================================================================
 def time_str_to_seconds(time_str):
     try:
         parts = time_str.split(':')
@@ -247,13 +262,6 @@ def time_str_to_seconds(time_str):
         return seconds
     except (ValueError, IndexError):
         return 0
-
-def resource_path(relative_path):
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
 
 def format_media_info(data):
     try:
