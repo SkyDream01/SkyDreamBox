@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 # SkyDreamBox/ui/video_tab_ui.py
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QLabel,
     QGroupBox, QComboBox, QGridLayout, QStyle
 )
-from PyQt5.QtCore import Qt
+from PySide6.QtCore import Qt
 
 class Ui_VideoTab:
     def setupUi(self, VideoTab):
@@ -20,12 +20,12 @@ class Ui_VideoTab:
 
         self.input_edit = QLineEdit()
         self.select_input_button = QPushButton("选择")
-        self.select_input_button.setIcon(VideoTab.style().standardIcon(QStyle.SP_DirOpenIcon))
+        self.select_input_button.setIcon(VideoTab.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon))
         io_layout.addLayout(self._create_hbox("输入:", self.input_edit, self.select_input_button))
 
         self.output_edit = QLineEdit()
         self.select_output_button = QPushButton("选择")
-        self.select_output_button.setIcon(VideoTab.style().standardIcon(QStyle.SP_DriveFDIcon))
+        self.select_output_button.setIcon(VideoTab.style().standardIcon(QStyle.StandardPixmap.SP_DriveFDIcon))
         io_layout.addLayout(self._create_hbox("输出:", self.output_edit, self.select_output_button))
         main_layout.addWidget(io_group)
 
@@ -104,13 +104,13 @@ class Ui_VideoTab:
         # 字幕
         self.subtitle_edit = QLineEdit()
         self.select_subtitle_button = QPushButton("选择")
-        self.select_subtitle_button.setIcon(VideoTab.style().standardIcon(QStyle.SP_FileIcon))
+        self.select_subtitle_button.setIcon(VideoTab.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon))
         options_layout.addLayout(self._create_hbox("字幕:", self.subtitle_edit, self.select_subtitle_button))
 
         main_layout.addWidget(options_group)
 
         self.run_button = QPushButton("开始处理")
-        main_layout.addWidget(self.run_button, 0, Qt.AlignCenter)
+        main_layout.addWidget(self.run_button, 0, Qt.AlignmentFlag.AlignCenter)
         main_layout.addStretch()
 
     def _create_hbox(self, label_text, widget, button):

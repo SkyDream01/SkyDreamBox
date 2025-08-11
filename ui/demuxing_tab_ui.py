@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 # SkyDreamBox/ui/demuxing_tab_ui.py
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QLabel,
     QGroupBox, QStyle
 )
-from PyQt5.QtCore import Qt
+from PySide6.QtCore import Qt
 
 class Ui_DemuxingTab:
     def setupUi(self, DemuxingTab):
@@ -18,7 +18,7 @@ class Ui_DemuxingTab:
 
         self.input_edit = QLineEdit()
         self.select_input_button = QPushButton("选择文件")
-        self.select_input_button.setIcon(DemuxingTab.style().standardIcon(QStyle.SP_DirOpenIcon))
+        self.select_input_button.setIcon(DemuxingTab.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon))
         input_layout = QHBoxLayout()
         input_label = QLabel("输入文件:")
         input_label.setFixedWidth(70)

@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 # SkyDreamBox/ui/main_window_ui.py
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QTextEdit,
-    QProgressBar, QSplitter, QScrollArea, QAction, QMenuBar
+    QProgressBar, QSplitter, QScrollArea, QMenuBar
 )
-from PyQt5.QtCore import Qt
+from PySide6.QtGui import QAction
+from PySide6.QtCore import Qt
 
 class Ui_MainWindow:
     def setupUi(self, MainWindow):
@@ -18,7 +19,7 @@ class Ui_MainWindow:
         self.main_layout.setContentsMargins(5, 5, 5, 5)
 
         # 创建垂直分割器
-        self.splitter = QSplitter(Qt.Vertical)
+        self.splitter = QSplitter(Qt.Orientation.Vertical)
 
         # 1. 主功能选项卡区域
         self.tabs = QTabWidget()
@@ -36,9 +37,9 @@ class Ui_MainWindow:
         info_scroll_area.setWidgetResizable(True)
         info_scroll_area.setFixedHeight(120)
         self.info_label = QLabel("选择媒体文件以查看信息")
-        self.info_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.info_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.info_label.setWordWrap(True)
-        self.info_label.setAlignment(Qt.AlignTop)
+        self.info_label.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.info_label.setObjectName("info_label")
         info_scroll_area.setWidget(self.info_label)
         self.info_console_tabs.addTab(info_scroll_area, "媒体信息")

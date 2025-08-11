@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 # SkyDreamBox/ui/audio_tab_ui.py
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QLabel,
     QGroupBox, QComboBox, QStyle, QGridLayout
 )
-from PyQt5.QtCore import Qt
+from PySide6.QtCore import Qt
 
 class Ui_AudioTab:
     def setupUi(self, AudioTab):
@@ -21,12 +21,12 @@ class Ui_AudioTab:
         
         self.input_edit = QLineEdit()
         self.select_input_button = QPushButton("选择")
-        self.select_input_button.setIcon(AudioTab.style().standardIcon(QStyle.SP_DirOpenIcon))
+        self.select_input_button.setIcon(AudioTab.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon))
         io_layout.addLayout(self._create_hbox("输入文件:", self.input_edit, self.select_input_button))
 
         self.output_edit = QLineEdit()
         self.select_output_button = QPushButton("选择")
-        self.select_output_button.setIcon(AudioTab.style().standardIcon(QStyle.SP_DriveFDIcon))
+        self.select_output_button.setIcon(AudioTab.style().standardIcon(QStyle.StandardPixmap.SP_DriveFDIcon))
         io_layout.addLayout(self._create_hbox("输出文件:", self.output_edit, self.select_output_button))
         
         main_layout.addWidget(io_group)
@@ -74,7 +74,7 @@ class Ui_AudioTab:
 
         # --- 第三部分: 执行按钮 ---
         self.run_button = QPushButton("开始处理")
-        main_layout.addWidget(self.run_button, 0, Qt.AlignCenter)
+        main_layout.addWidget(self.run_button, 0, Qt.AlignmentFlag.AlignCenter)
         main_layout.addStretch()
 
 

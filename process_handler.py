@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from PyQt5.QtCore import QProcess
+from PySide6.QtCore import QProcess
 
 # =============================================================================
 # Process Handler Module (进程处理模块)
@@ -29,7 +29,7 @@ class ProcessHandler:
         return True, "FFmpeg 已找到。"
 
     def run_ffmpeg(self, command_list):
-        if self.ffmpeg_process.state() == QProcess.Running:
+        if self.ffmpeg_process.state() == QProcess.ProcessState.Running:
             return False, "错误: 当前已有任务在运行中。"
         
         if command_list and command_list[0].lower() == 'ffmpeg':
@@ -49,7 +49,7 @@ class ProcessHandler:
         return True, f"执行: {original_command_to_display}"
 
     def run_ffprobe(self, file_path):
-        if self.ffprobe_process.state() == QProcess.Running:
+        if self.ffprobe_process.state() == QProcess.ProcessState.Running:
             self.ffprobe_process.kill()
             
         command = [

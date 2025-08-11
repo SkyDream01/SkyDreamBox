@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 # SkyDreamBox/ui/pro_tab_ui.py
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QVBoxLayout, QPushButton, QLabel, QTextEdit
 )
-from PyQt5.QtCore import Qt
+from PySide6.QtCore import Qt
 
 class Ui_ProfessionalTab:
     def setupUi(self, ProfessionalTab):
@@ -19,5 +19,5 @@ class Ui_ProfessionalTab:
         layout.addWidget(self.command_input)
 
         self.run_button = QPushButton("执行")
-        layout.addWidget(self.run_button, 0, Qt.AlignCenter)
+        layout.addWidget(self.run_button, 0, Qt.AlignmentFlag.AlignCenter)
         layout.addStretch()

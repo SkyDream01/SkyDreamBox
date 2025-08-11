@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 # SkyDreamBox/ui/splash_screen_ui.py
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication, QSplashScreen, QWidget, QVBoxLayout, QLabel, QProgressBar
 )
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
 
 class CustomSplashScreen(QSplashScreen):
     """
@@ -14,7 +14,7 @@ class CustomSplashScreen(QSplashScreen):
     def __init__(self, icon_pixmap: QPixmap, app_name="", version="", width=450, height=350):
         # 创建一个透明的父级Pixmap，因为我们将通过样式表控制背景
         super().__init__(QPixmap(width, height))
-        self.setWindowFlag(Qt.FramelessWindowHint) # 确保无边框
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint) # 确保无边框
 
         self.version = version
         
@@ -30,22 +30,22 @@ class CustomSplashScreen(QSplashScreen):
         # --- 1. Logo 图标 ---
         icon_label = QLabel()
         # 将传入的pixmap缩放为合适的图标尺寸
-        icon_label.setPixmap(icon_pixmap.scaled(128, 128, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        icon_label.setAlignment(Qt.AlignCenter)
+        icon_label.setPixmap(icon_pixmap.scaled(128, 128, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         # --- 2. 标题和版本号 ---
         title_label = QLabel(app_name)
         title_label.setObjectName("splashTitle")
-        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         version_label = QLabel(f"v{self.version}")
         version_label.setObjectName("splashVersion")
-        version_label.setAlignment(Qt.AlignCenter)
+        version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # --- 3. 状态信息和进度条 ---
         self.message_label = QLabel("启动中...")
         self.message_label.setObjectName("splashMessage")
-        self.message_label.setAlignment(Qt.AlignCenter)
+        self.message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setObjectName("splashProgressBar")
@@ -96,7 +96,7 @@ class CustomSplashScreen(QSplashScreen):
             }
         """)
 
-    def showMessage(self, message, alignment=Qt.AlignLeft, color=Qt.black):
+    def showMessage(self, message, alignment=Qt.AlignmentFlag.AlignLeft, color=Qt.GlobalColor.black):
         self.message_label.setText(message)
         QApplication.processEvents()
 

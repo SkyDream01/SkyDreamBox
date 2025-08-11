@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 # SkyDreamBox/ui/common_ops_tab_ui.py
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QLabel,
     QGroupBox, QStyle
 )
-from PyQt5.QtCore import Qt
+from PySide6.QtCore import Qt
 
 class Ui_CommonOpsTab:
     def setupUi(self, CommonOpsTab):
@@ -19,12 +19,12 @@ class Ui_CommonOpsTab:
 
         self.trim_input_edit = QLineEdit()
         self.select_trim_input_button = QPushButton("选择")
-        self.select_trim_input_button.setIcon(CommonOpsTab.style().standardIcon(QStyle.SP_DirOpenIcon))
+        self.select_trim_input_button.setIcon(CommonOpsTab.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon))
         trim_layout.addLayout(self._create_hbox("输入:", self.trim_input_edit, self.select_trim_input_button))
 
         self.trim_output_edit = QLineEdit()
         self.select_trim_output_button = QPushButton("选择")
-        self.select_trim_output_button.setIcon(CommonOpsTab.style().standardIcon(QStyle.SP_DriveFDIcon))
+        self.select_trim_output_button.setIcon(CommonOpsTab.style().standardIcon(QStyle.StandardPixmap.SP_DriveFDIcon))
         trim_layout.addLayout(self._create_hbox("输出:", self.trim_output_edit, self.select_trim_output_button))
 
         time_layout = QHBoxLayout()
@@ -39,7 +39,7 @@ class Ui_CommonOpsTab:
         trim_layout.addLayout(time_layout)
 
         self.trim_button = QPushButton("开始截取")
-        trim_layout.addWidget(self.trim_button, 0, Qt.AlignCenter)
+        trim_layout.addWidget(self.trim_button, 0, Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(trim_group)
 
         # --- 图声合成组 ---
@@ -48,21 +48,21 @@ class Ui_CommonOpsTab:
 
         self.img_input_edit = QLineEdit()
         self.select_img_button = QPushButton("选择图片")
-        self.select_img_button.setIcon(CommonOpsTab.style().standardIcon(QStyle.SP_FileIcon))
+        self.select_img_button.setIcon(CommonOpsTab.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon))
         img_audio_layout.addLayout(self._create_hbox("图片:", self.img_input_edit, self.select_img_button))
 
         self.audio_input_edit = QLineEdit()
         self.select_audio_button = QPushButton("选择音频")
-        self.select_audio_button.setIcon(CommonOpsTab.style().standardIcon(QStyle.SP_FileIcon))
+        self.select_audio_button.setIcon(CommonOpsTab.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon))
         img_audio_layout.addLayout(self._create_hbox("音频:", self.audio_input_edit, self.select_audio_button))
 
         self.img_audio_output_edit = QLineEdit()
         self.select_img_audio_output_button = QPushButton("选择输出")
-        self.select_img_audio_output_button.setIcon(CommonOpsTab.style().standardIcon(QStyle.SP_DriveFDIcon))
+        self.select_img_audio_output_button.setIcon(CommonOpsTab.style().standardIcon(QStyle.StandardPixmap.SP_DriveFDIcon))
         img_audio_layout.addLayout(self._create_hbox("输出:", self.img_audio_output_edit, self.select_img_audio_output_button))
 
         self.img_audio_button = QPushButton("开始合成")
-        img_audio_layout.addWidget(self.img_audio_button, 0, Qt.AlignCenter)
+        img_audio_layout.addWidget(self.img_audio_button, 0, Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(img_audio_group)
 
         main_layout.addStretch()

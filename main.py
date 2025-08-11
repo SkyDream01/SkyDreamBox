@@ -7,14 +7,14 @@ import json
 import datetime
 import time
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QMessageBox, QWidget
 )
-from PyQt5.QtCore import QProcess, QTextCodec, Qt, QTimer
-from PyQt5.QtGui import QIcon, QPixmap
+from PySide6.QtCore import QProcess, Qt, QTimer
+from PySide6.QtGui import QIcon, QPixmap
 
 # --- UI 和逻辑分离 ---
-from constants import APP_NAME, APP_VERSION, AUTHOR, GITHUB_URL
+from constants import APP_NAME
 from ui.main_window_ui import Ui_MainWindow
 from ui.splash_screen_ui import CustomSplashScreen
 from process_handler import ProcessHandler
@@ -79,11 +79,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _show_ffmpeg_error_and_exit(self, message):
         error_box = QMessageBox(self)
-        error_box.setIcon(QMessageBox.Critical)
+        error_box.setIcon(QMessageBox.Icon.Critical)
         error_box.setWindowTitle("核心组件缺失")
         error_box.setText(message)
-        error_box.setStandardButtons(QMessageBox.Ok)
-        error_box.exec_()
+        error_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        error_box.exec()
 
     def _setup_tabs(self):
         for name in self.tab_constructors.keys():
@@ -158,7 +158,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _on_process_finished(self, exit_code, exit_status):
         self.set_buttons_enabled(True)
-        if exit_status == QProcess.NormalExit and exit_code == 0:
+        if exit_status == QProcess.ExitStatus.NormalExit and exit_code == 0:
             if self.progress_bar.value() < 100: self.progress_bar.setValue(100)
             self.console.append("\n<hr><b><font color='#2ecc71'>任务已成功完成！</font></b>")
             self.progress_status_label.setText("任务完成")
@@ -170,8 +170,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _handle_stdout(self):
         process = self.process_handler.ffmpeg_process
         if not process: return
-        codec = QTextCodec.codecForLocale()
-        message = codec.toUnicode(process.readAllStandardOutput())
+        message = process.readAllStandardOutput().data().decode('utf-8', 'ignore')
         self.console.insertPlainText(message)
         self.console.ensureCursorVisible()
 
@@ -219,17 +218,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
 
 if __name__ == '__main__':
-    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-
     app = QApplication(sys.argv)
     app.setStyleSheet(STYLESHEET)
-    QTextCodec.setCodecForLocale(QTextCodec.codecForName("UTF-8"))
-
+    
     logo_path = resource_path("assets/logo.png")
     icon_pixmap = QPixmap(logo_path)
     
-    splash = CustomSplashScreen(icon_pixmap, app_name=APP_NAME, version=APP_VERSION)
+    splash = CustomSplashScreen(icon_pixmap, app_name=APP_NAME, version="2.2")
     splash.show()
 
     main_win = MainWindow(splash)
@@ -240,4 +235,4 @@ if __name__ == '__main__':
     main_win.show()
     splash.finish(main_win)
 
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
