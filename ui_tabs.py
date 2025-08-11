@@ -48,8 +48,8 @@ def validate_fps(fps_str):
 
 def validate_resolution(res_str):
     if not res_str: return True
-    # --- 修改: 允许 宽度x高度 或 宽度:-1 的格式 ---
-    return re.fullmatch(r'\d+[xX]\d+', res_str) is not None or re.fullmatch(r'\d+:-1', res_str) is not None
+    # --- 修改: 统一使用冒号作为分隔符 ---
+    return re.fullmatch(r'\d+:-?\d+', res_str) is not None
 
 def validate_bitrate(br_str):
     if not br_str: return True
@@ -174,7 +174,7 @@ class VideoTab(BaseTab, Ui_VideoTab):
         if not validate_fps(self.fps_edit.text()):
             display_error(self.console, f"无效的FPS值: {self.fps_edit.text()}"); return False
         if not validate_resolution(self.resolution_edit.text()):
-            display_error(self.console, f"无效的分辨率格式: {self.resolution_edit.text()} (应为 宽度x高度)"); return False
+            display_error(self.console, f"无效的分辨率格式: {self.resolution_edit.text()} (应为 宽度:高度)"); return False
         if self.video_bitrate_edit.isVisible() and not validate_bitrate(self.video_bitrate_edit.text()):
             display_error(self.console, f"无效的视频比特率: {self.video_bitrate_edit.text()}"); return False
         if self.subtitle_edit.text() and not os.path.exists(self.subtitle_edit.text()):
@@ -218,7 +218,8 @@ class VideoTab(BaseTab, Ui_VideoTab):
             if self.fps_edit.text():
                 command.extend(["-r", self.fps_edit.text()])
             if self.resolution_edit.text():
-                command.extend(["-s", self.resolution_edit.text()])
+                resolution = self.resolution_edit.text().replace(':', 'x')
+                command.extend(["-s", resolution])
 
         audio_codec = self.audio_codec_combo.currentText()
         command.extend(["-c:a", audio_codec])
@@ -228,6 +229,7 @@ class VideoTab(BaseTab, Ui_VideoTab):
         command.extend(["-y", output_file])
         return command
 
+# ... (后面其他选项卡的代码保持不变)
 class AudioTab(BaseTab, Ui_AudioTab):
     def __init__(self, main_window):
         super().__init__(main_window)
