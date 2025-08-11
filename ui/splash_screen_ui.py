@@ -38,12 +38,12 @@ class CustomSplashScreen(QSplashScreen):
         title_label.setObjectName("splashTitle")
         title_label.setAlignment(Qt.AlignCenter)
         
-        version_label = QLabel(f"版本 {self.version}")
+        version_label = QLabel(f"v{self.version}")
         version_label.setObjectName("splashVersion")
         version_label.setAlignment(Qt.AlignCenter)
 
         # --- 3. 状态信息和进度条 ---
-        self.message_label = QLabel("正在启动...")
+        self.message_label = QLabel("启动中...")
         self.message_label.setObjectName("splashMessage")
         self.message_label.setAlignment(Qt.AlignCenter)
 

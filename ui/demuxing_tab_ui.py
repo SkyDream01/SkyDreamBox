@@ -13,7 +13,7 @@ class Ui_DemuxingTab:
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 15, 10, 15)
 
-        demux_group = QGroupBox("抽取音/视频")
+        demux_group = QGroupBox("音视频分离")
         demux_layout = QVBoxLayout(demux_group)
 
         self.input_edit = QLineEdit()
@@ -29,8 +29,8 @@ class Ui_DemuxingTab:
 
         buttons_layout = QHBoxLayout()
         buttons_layout.addStretch()
-        self.extract_video_button = QPushButton("仅抽取视频流")
-        self.extract_audio_button = QPushButton("仅抽取音频流")
+        self.extract_video_button = QPushButton("仅视频")
+        self.extract_audio_button = QPushButton("仅音频")
         buttons_layout.addWidget(self.extract_video_button)
         buttons_layout.addWidget(self.extract_audio_button)
         buttons_layout.addStretch()

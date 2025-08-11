@@ -25,18 +25,16 @@ AUDIO_CODECS_FOR_VIDEO_FORMAT = {
     "webm": ["opus", "vorbis", "copy"]
 }
 
-# --- MODIFIED START: 简化WAV的编码器并创建专用的位深映射 ---
 AUDIO_FORMAT_CODECS = {
     "mp3": ["libmp3lame"],
     "flac": ["flac"],
     "aac": ["aac"],
-    "wav": ["pcm"], # WAV的编码器统一为PCM
+    "wav": ["pcm"],
     "opus": ["libopus"],
     "alac": ["alac"],
     "m4a": ["aac", "alac", "copy"]
 }
 
-# 为WAV格式创建的位深选项到真实PCM编码器的映射
 WAV_BIT_DEPTH_CODECS = {
     "16-bit (默认)": "pcm_s16le",
     "24-bit": "pcm_s24le",
@@ -44,14 +42,12 @@ WAV_BIT_DEPTH_CODECS = {
     "8-bit": "pcm_u8"
 }
 
-# 为其他非PCM格式定义的采样格式
 AUDIO_SAMPLE_FORMATS = {
     "(默认)": None,
     "16-bit": "s16",
     "24-bit": "s32",
     "32-bit (float)": "fltp"
 }
-# --- MODIFIED END ---
 
 VIDEO_FORMATS = list(VIDEO_FORMAT_CODECS.keys())
 AUDIO_FORMATS = list(AUDIO_FORMAT_CODECS.keys())
@@ -60,23 +56,30 @@ AUDIO_SAMPLE_RATES = ["(默认)", "24000", "44100", "48000", "96000", "192000"]
 SUBTITLE_FORMATS = "字幕文件 (*.srt *.ass *.ssa);;所有文件 (*)"
 DEFAULT_COMPRESSION_LEVEL = "5"
 
+RESOLUTION_PRESETS = {
+    "720p": 1280,
+    "1080p": 1920,
+    "2k": 2560,
+    "4k": 3840
+}
+
 
 # =============================================================================
 # Stylesheet
 # =============================================================================
 STYLESHEET = """
 QWidget {
-    background-color: #2c3e50;
-    color: #ecf0f1;
+    background-color: #1a1a2e; /* 深邃的太空蓝 */
+    color: #e0e0e0; /* 柔和的灰白文字 */
     font-family: 'Segoe UI', 'Microsoft YaHei', 'Arial';
     font-size: 9pt;
 }
 QMainWindow, QDialog {
-    background-color: #2c3e50;
+    background-color: #1a1a2e;
 }
 QGroupBox {
-    background-color: #34495e;
-    border: 1px solid #2c3e50;
+    background-color: #1f1f3a; /* 稍亮的背景 */
+    border: 1px solid #1a1a2e;
     border-radius: 4px;
     margin-top: 1ex;
     padding: 5px;
@@ -85,19 +88,19 @@ QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top center;
     padding: 1px 5px;
-    background-color: #1abc9c;
-    color: #ffffff;
+    background-color: #9aace5; /* 柔和的星光蓝 */
+    color: #0f0f2d; /* 标题文字使用深色以保证对比度 */
     border-radius: 4px;
     font-weight: bold;
 }
 QTabWidget::pane {
-    border: 1px solid #34495e;
+    border: 1px solid #1f1f3a;
     border-radius: 3px;
     padding: 2px;
 }
 QTabBar::tab {
-    background: #34495e;
-    border: 1px solid #2c3e50;
+    background: #1f1f3a;
+    border: 1px solid #1a1a2e;
     border-bottom: none;
     border-top-left-radius: 4px;
     border-top-right-radius: 4px;
@@ -107,42 +110,43 @@ QTabBar::tab {
     color: #bdc3c7;
 }
 QTabBar::tab:selected, QTabBar::tab:hover {
-    background: #1abc9c;
-    color: #ffffff;
+    background: #9aace5;
+    color: #0f0f2d;
     font-weight: bold;
 }
 QTabBar::tab:selected {
-    border-color: #16a085;
+    border-color: #8297d9;
 }
 QLineEdit, QTextEdit, QComboBox, QSpinBox {
-    background-color: #2c3e50;
-    border: 1px solid #34495e;
+    background-color: #1a1a2e;
+    border: 1px solid #1f1f3a;
     padding: 3px;
     border-radius: 4px;
-    color: #ecf0f1;
+    color: #e0e0e0;
 }
 QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QSpinBox:focus {
-    border: 1px solid #1abc9c;
+    border: 1px solid #9aace5;
 }
 QComboBox::drop-down {
     subcontrol-origin: padding;
     subcontrol-position: top right;
     width: 15px;
     border-left-width: 1px;
-    border-left-color: #34495e;
+    border-left-color: #1f1f3a;
     border-left-style: solid;
     border-top-right-radius: 3px;
     border-bottom-right-radius: 3px;
 }
 QComboBox QAbstractItemView {
-    background-color: #34495e;
-    selection-background-color: #1abc9c;
+    background-color: #1f1f3a;
+    selection-background-color: #9aace5;
+    selection-color: #0f0f2d;
     border-radius: 4px;
-    color: #ecf0f1;
+    color: #e0e0e0;
 }
 QPushButton {
-    background-color: #1abc9c;
-    color: white;
+    background-color: #9aace5;
+    color: #0f0f2d;
     border: none;
     padding: 4px 8px;
     border-radius: 4px;
@@ -150,38 +154,38 @@ QPushButton {
     font-weight: bold;
 }
 QPushButton:hover {
-    background-color: #1dd2af;
+    background-color: #b3c1f0;
 }
 QPushButton:pressed {
-    background-color: #16a085;
+    background-color: #8297d9;
 }
 QPushButton:disabled {
     background-color: #566573;
     color: #aeb6bf;
 }
 QProgressBar {
-    border: 1px solid #34495e;
+    border: 1px solid #1f1f3a;
     border-radius: 5px;
     text-align: center;
-    background-color: #2c3e50;
-    color: #ecf0f1;
+    background-color: #1a1a2e;
+    color: #e0e0e0;
     font-weight: bold;
 }
 QProgressBar::chunk {
-    background-color: #1abc9c;
+    background-color: #9aace5;
     border-radius: 4px;
 }
 QLabel {
     background-color: transparent;
 }
 #info_label {
-    background-color: #34495e;
+    background-color: #1f1f3a;
     padding: 5px;
     border-radius: 5px;
-    border: 1px solid #2c3e50;
+    border: 1px solid #1a1a2e;
 }
 #console {
-    background-color: #1e2b36;
+    background-color: #0f0f0f; /* 纯黑控制台背景 */
     color: #d4d4d4;
     font-family: 'Consolas', 'Courier New', monospace;
     border-radius: 5px;
@@ -199,21 +203,23 @@ QScrollArea {
     border: none;
 }
 QMenuBar {
-    background-color: #34495e;
+    background-color: #1f1f3a;
 }
 QMenuBar::item {
     padding: 4px 8px;
     background: transparent;
 }
 QMenuBar::item:selected {
-    background: #1abc9c;
+    background: #9aace5;
+    color: #0f0f2d;
 }
 QMenu {
-    background-color: #34495e;
-    border: 1px solid #1abc9c;
+    background-color: #1f1f3a;
+    border: 1px solid #9aace5;
 }
 QMenu::item:selected {
-    background-color: #1abc9c;
+    background-color: #9aace5;
+    color: #0f0f2d;
 }
 """
 
@@ -258,11 +264,11 @@ def format_media_info(data):
         bit_rate_kbps = int(float(fmt.get('bit_rate', 0)) / 1000)
         info = f"""
         <style>
-            b {{ color: #1abc9c; }}
+            b {{ color: #9aace5; }}
             td {{ padding: 2px 8px 2px 0; vertical-align: top; }}
         </style>
         <table>
-            <tr><td><b>文件名:</b></td><td>{filename}</td></tr>
+            <tr><td><b>文件:</b></td><td>{filename}</td></tr>
             <tr><td><b>格式:</b></td><td>{fmt.get('format_long_name', 'N/A')}</td></tr>
             <tr><td><b>时长:</b></td><td>{duration_str}</td></tr>
             <tr><td><b>总比特率:</b></td><td>{bit_rate_kbps:.0f} kb/s</td></tr>
@@ -270,7 +276,7 @@ def format_media_info(data):
         """
         for stream in data.get('streams', []):
             stream_type = stream.get('codec_type')
-            info += f"<b>{stream_type.capitalize()} 流 #{stream.get('index')}:</b><br>"
+            info += f"<b>{stream_type.capitalize()} #{stream.get('index')}:</b><br>"
             info += "<table>"
             if stream_type == 'video':
                 info += (f"<tr><td>&nbsp;&nbsp;编码:</td><td>{stream.get('codec_long_name', 'N/A')}</td></tr>"
@@ -279,8 +285,8 @@ def format_media_info(data):
             elif stream_type == 'audio':
                 info += (f"<tr><td>&nbsp;&nbsp;编码:</td><td>{stream.get('codec_long_name', 'N/A')}</td></tr>"
                          f"<tr><td>&nbsp;&nbsp;采样率:</td><td>{stream.get('sample_rate')} Hz</td></tr>"
-                         f"<tr><td>&nbsp;&nbsp;通道:</td><td>{stream.get('channel_layout', 'N/A')}</td></tr>")
+                         f"<tr><td>&nbsp;&nbsp;声道:</td><td>{stream.get('channel_layout', 'N/A')}</td></tr>")
             info += "</table><br>"
         return info.strip().removesuffix("<br>")
     except Exception as e:
-        return f"<font color='#f1c40f'>格式化信息时出错: {e}</font>"
+        return f"<font color='#f1c40f'>解析媒体信息出错: {e}</font>"

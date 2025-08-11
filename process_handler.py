@@ -21,7 +21,7 @@ class ProcessHandler:
 
         if not process.waitForFinished(5000):  # 5秒超时
             process.kill()
-            return False, "错误: FFmpeg进程超时，无法获取版本信息。"
+            return False, "错误: FFmpeg响应超时，无法获取版本信息。"
 
         if process.exitCode() != 0:
             return False, f"错误: FFmpeg执行出错 (退出码: {process.exitCode()})。\n\n请检查您的FFmpeg安装是否完整。"
@@ -30,7 +30,7 @@ class ProcessHandler:
 
     def run_ffmpeg(self, command_list):
         if self.ffmpeg_process.state() == QProcess.Running:
-            return False, "错误: 当前已有任务正在运行。"
+            return False, "错误: 当前已有任务在运行中。"
         
         if command_list and command_list[0].lower() == 'ffmpeg':
             args = command_list[1:].copy()
@@ -46,7 +46,7 @@ class ProcessHandler:
         self.ffmpeg_process.start(FFMPEG_EXEC, ["-nostdin"] + args)
         
         original_command_to_display = f"{FFMPEG_EXEC} {' '.join(command_list[1:])}"
-        return True, f"执行命令: {original_command_to_display}"
+        return True, f"执行: {original_command_to_display}"
 
     def run_ffprobe(self, file_path):
         if self.ffprobe_process.state() == QProcess.Running:

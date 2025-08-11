@@ -59,7 +59,7 @@ class Ui_AboutTab:
         info_layout.addWidget(github_label, 2, 1)
 
         info_layout.addWidget(self._create_info_label("描述:"), 3, 0, Qt.AlignRight | Qt.AlignTop)
-        description_label = QLabel("一个基于 PyQt5 和 FFmpeg 构建的模块化音视频处理工具。")
+        description_label = QLabel("一款基于 PyQt5 和 FFmpeg 的模块化音视频处理工具。")
         description_label.setWordWrap(True)
         info_layout.addWidget(description_label, 3, 1, 1, 2)  # Span across 2 columns
 

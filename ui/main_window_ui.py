@@ -11,14 +11,11 @@ class Ui_MainWindow:
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
 
-        # 菜单栏已被移除
-        # self._create_menu_bar(MainWindow) 
-
         self.central_widget = QWidget(MainWindow)
         MainWindow.setCentralWidget(self.central_widget)
 
         self.main_layout = QVBoxLayout(self.central_widget)
-        self.main_layout.setContentsMargins(5, 5, 5, 5) # MODIFIED
+        self.main_layout.setContentsMargins(5, 5, 5, 5)
 
         # 创建垂直分割器
         self.splitter = QSplitter(Qt.Vertical)
@@ -30,22 +27,21 @@ class Ui_MainWindow:
         # 2. 底部信息和控制台区域
         bottom_widget = QWidget()
         bottom_layout = QVBoxLayout(bottom_widget)
-        bottom_layout.setContentsMargins(0, 2, 0, 0) # MODIFIED
+        bottom_layout.setContentsMargins(0, 2, 0, 0)
 
         self.info_console_tabs = QTabWidget()
 
         # 2a. 媒体文件信息 Tab
         info_scroll_area = QScrollArea()
         info_scroll_area.setWidgetResizable(True)
-        # --- MODIFIED: Reduced height ---
-        info_scroll_area.setFixedHeight(120) # MODIFIED
-        self.info_label = QLabel("请选择一个媒体文件以查看信息...")
+        info_scroll_area.setFixedHeight(120)
+        self.info_label = QLabel("选择媒体文件以查看信息")
         self.info_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.info_label.setWordWrap(True)
         self.info_label.setAlignment(Qt.AlignTop)
         self.info_label.setObjectName("info_label")
         info_scroll_area.setWidget(self.info_label)
-        self.info_console_tabs.addTab(info_scroll_area, "媒体文件信息")
+        self.info_console_tabs.addTab(info_scroll_area, "媒体信息")
 
         # 2b. FFmpeg 输出信息 Tab
         console_widget = QWidget()
@@ -58,23 +54,21 @@ class Ui_MainWindow:
 
         # 进度条和状态标签
         progress_layout = QHBoxLayout()
-        progress_layout.addWidget(QLabel("处理进度:"))
+        progress_layout.addWidget(QLabel("进度:"))
         self.progress_bar = QProgressBar()
         progress_layout.addWidget(self.progress_bar)
-        self.progress_status_label = QLabel("待命")
-        self.progress_status_label.setMinimumWidth(220) # MODIFIED
+        self.progress_status_label = QLabel("待机")
+        self.progress_status_label.setMinimumWidth(220)
         progress_layout.addWidget(self.progress_status_label)
         progress_layout.setStretch(1, 1)
 
         console_layout.addWidget(self.console)
         console_layout.addLayout(progress_layout)
-        self.info_console_tabs.addTab(console_widget, "FFmpeg 输出信息")
+        self.info_console_tabs.addTab(console_widget, "FFmpeg 输出")
 
         bottom_layout.addWidget(self.info_console_tabs)
         self.splitter.addWidget(bottom_widget)
 
         # 设置分割器初始大小
-        self.splitter.setSizes([550, 200]) # MODIFIED
+        self.splitter.setSizes([550, 200])
         self.main_layout.addWidget(self.splitter)
-
-    # _create_menu_bar 方法已被移除

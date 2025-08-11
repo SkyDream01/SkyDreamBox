@@ -21,7 +21,7 @@ from utils import (
     VIDEO_FORMATS, VIDEO_FORMAT_CODECS, AUDIO_CODECS_FOR_VIDEO_FORMAT,
     AUDIO_BITRATES, AUDIO_FORMATS, AUDIO_FORMAT_CODECS, AUDIO_SAMPLE_RATES,
     WAV_BIT_DEPTH_CODECS, AUDIO_SAMPLE_FORMATS,
-    SUBTITLE_FORMATS, DEFAULT_COMPRESSION_LEVEL
+    SUBTITLE_FORMATS, DEFAULT_COMPRESSION_LEVEL, RESOLUTION_PRESETS
 )
 # constants 和 resource_path 不再在此文件中直接使用，可以移除
 
@@ -48,7 +48,8 @@ def validate_fps(fps_str):
 
 def validate_resolution(res_str):
     if not res_str: return True
-    return re.fullmatch(r'\d+[xX]\d+', res_str) is not None
+    # --- 修改: 允许 宽度x高度 或 宽度:-1 的格式 ---
+    return re.fullmatch(r'\d+[xX]\d+', res_str) is not None or re.fullmatch(r'\d+:-1', res_str) is not None
 
 def validate_bitrate(br_str):
     if not br_str: return True
@@ -111,12 +112,26 @@ class VideoTab(BaseTab, Ui_VideoTab):
         self.format_combo.currentTextChanged.connect(self._on_video_format_changed)
         self.audio_codec_combo.currentIndexChanged.connect(self._update_audio_bitrate_visibility)
         self.video_codec_combo.currentTextChanged.connect(self._update_video_options_visibility)
+        # --- 新增: 连接分辨率预设下拉菜单的信号 ---
+        self.resolution_preset_combo.currentTextChanged.connect(self._on_resolution_preset_changed)
 
     def _initialize_ui_state(self):
         self.format_combo.addItems(VIDEO_FORMATS)
         self.audio_bitrate_combo.addItems(AUDIO_BITRATES)
         self.audio_bitrate_combo.setCurrentText("192k")
+        # --- 新增: 初始化分辨率预设下拉菜单 ---
+        self.resolution_preset_combo.addItems(["自定义"] + list(RESOLUTION_PRESETS.keys()))
         self._on_video_format_changed(self.format_combo.currentText())
+
+    # --- 新增: 分辨率预设选择事件处理函数 ---
+    def _on_resolution_preset_changed(self, preset):
+        if preset in RESOLUTION_PRESETS:
+            width = RESOLUTION_PRESETS[preset]
+            self.resolution_edit.setText(f"{width}:-1")
+            self.resolution_edit.setEnabled(False)
+        else: # "自定义"
+            self.resolution_edit.clear()
+            self.resolution_edit.setEnabled(True)
 
     def _on_video_format_changed(self, v_format):
         self.video_codec_combo.clear()

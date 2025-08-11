@@ -15,19 +15,19 @@ class Ui_AudioTab:
         main_layout.setContentsMargins(10, 15, 10, 15)
 
         # --- 第一部分: 输入与输出 (一栏) ---
-        io_group = QGroupBox("输入与输出")
+        io_group = QGroupBox("输入输出")
         io_layout = QVBoxLayout(io_group)
         io_layout.setSpacing(8)
         
         self.input_edit = QLineEdit()
-        self.select_input_button = QPushButton("选择文件")
+        self.select_input_button = QPushButton("选择")
         self.select_input_button.setIcon(AudioTab.style().standardIcon(QStyle.SP_DirOpenIcon))
-        io_layout.addLayout(self._create_hbox("音频文件:", self.input_edit, self.select_input_button))
+        io_layout.addLayout(self._create_hbox("输入文件:", self.input_edit, self.select_input_button))
 
         self.output_edit = QLineEdit()
-        self.select_output_button = QPushButton("选择路径")
+        self.select_output_button = QPushButton("选择")
         self.select_output_button.setIcon(AudioTab.style().standardIcon(QStyle.SP_DriveFDIcon))
-        io_layout.addLayout(self._create_hbox("输出路径:", self.output_edit, self.select_output_button))
+        io_layout.addLayout(self._create_hbox("输出文件:", self.output_edit, self.select_output_button))
         
         main_layout.addWidget(io_group)
 
@@ -38,7 +38,7 @@ class Ui_AudioTab:
         options_layout.setSpacing(10)
 
         # 左栏参数
-        options_layout.addWidget(QLabel("输出格式:"), 0, 0)
+        options_layout.addWidget(QLabel("格式:"), 0, 0)
         self.format_combo = QComboBox()
         options_layout.addWidget(self.format_combo, 0, 1)
 
@@ -51,12 +51,12 @@ class Ui_AudioTab:
         options_layout.addWidget(self.sample_rate_combo, 2, 1)
 
         # 右栏参数
-        self.bit_depth_label = QLabel("位深/采样格式:")
+        self.bit_depth_label = QLabel("位深/格式:")
         options_layout.addWidget(self.bit_depth_label, 0, 2)
         self.bit_depth_combo = QComboBox()
         options_layout.addWidget(self.bit_depth_combo, 0, 3)
 
-        self.bitrate_label = QLabel("音频比特率:")
+        self.bitrate_label = QLabel("比特率:")
         options_layout.addWidget(self.bitrate_label, 1, 2)
         self.bitrate_combo = QComboBox()
         options_layout.addWidget(self.bitrate_combo, 1, 3)
@@ -73,7 +73,7 @@ class Ui_AudioTab:
         main_layout.addWidget(options_group)
 
         # --- 第三部分: 执行按钮 ---
-        self.run_button = QPushButton("开始处理音频")
+        self.run_button = QPushButton("开始处理")
         main_layout.addWidget(self.run_button, 0, Qt.AlignCenter)
         main_layout.addStretch()
 
@@ -81,7 +81,6 @@ class Ui_AudioTab:
     def _create_hbox(self, label_text, widget, button):
         layout = QHBoxLayout()
         label = QLabel(label_text)
-        label.setFixedWidth(70)
         layout.addWidget(label)
         layout.addWidget(widget)
         layout.addWidget(button)
