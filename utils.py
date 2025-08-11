@@ -11,11 +11,11 @@ import datetime
 # =============================================================================
 
 VIDEO_FORMAT_CODECS = {
-    "mp4": ["libx264", "libx265", "h264_nvenc", "hevc_nvenc", "copy"],
-    "mkv": ["libx264", "libx265", "h264_nvenc", "hevc_nvenc", "vp9", "copy"],
+    "mp4": ["libx264", "h264_nvenc", "h264_amf", "h264_qsv", "libx265", "hevc_nvenc", "hevc_amf", "hevc_qsv", "libaom-av1", "copy"],
+    "mkv": ["libx264", "h264_nvenc", "h264_amf", "h264_qsv", "libx265", "hevc_nvenc", "hevc_amf", "hevc_qsv", "vp9", "libaom-av1", "copy"],
     "avi": ["libx264", "mpeg4"],
-    "mov": ["libx264", "libx265", "h264_nvenc", "hevc_nvenc", "copy"],
-    "webm": ["vp9", "libvpx-vp9", "copy"]
+    "mov": ["libx264", "h264_nvenc", "h264_amf", "h264_qsv", "libx265", "hevc_nvenc", "hevc_amf", "hevc_qsv", "copy"],
+    "webm": ["vp9", "libvpx-vp9", "libaom-av1", "copy"]
 }
 AUDIO_CODECS_FOR_VIDEO_FORMAT = {
     "mp4": ["aac", "mp3", "alac", "copy"],

@@ -149,8 +149,8 @@ class VideoTab(BaseTab, Ui_VideoTab):
 
     def _update_video_options_visibility(self):
         codec = self.video_codec_combo.currentText()
-        is_crf_visible = "libx" in codec
-        is_cq_visible = "nvenc" in codec
+        is_crf_visible = "libx" in codec or "av1" in codec or "qsv" in codec
+        is_cq_visible = "nvenc" in codec or "amf" in codec
 
         self.crf_label.setVisible(is_crf_visible)
         self.crf_edit.setVisible(is_crf_visible)
@@ -202,24 +202,40 @@ class VideoTab(BaseTab, Ui_VideoTab):
         command = ["ffmpeg", "-i", input_file]
         
         subtitle_file = self.subtitle_edit.text()
+        
+        # 将视频滤镜相关的命令存入一个列表
+        video_filters = []
+        
         if subtitle_file:
             escaped_subtitle_path = subtitle_file.replace(':', '\\\\:')
-            command.extend(["-vf", f"subtitles={escaped_subtitle_path}"])
+            video_filters.append(f"subtitles={escaped_subtitle_path}")
 
         video_codec = self.video_codec_combo.currentText()
         command.extend(["-c:v", video_codec])
+        
+        if self.resolution_edit.text():
+            resolution = self.resolution_edit.text()
+            video_filters.append(f"scale={resolution}")
+
+        # 如果有任何视频滤镜，将它们合并并添加到命令中
+        if video_filters:
+            command.extend(["-vf", ",".join(video_filters)])
+
         if video_codec != 'copy':
-            if self.crf_edit.isVisible() and self.crf_edit.text():
-                command.extend(["-crf", self.crf_edit.text()])
+            if "qsv" in video_codec:
+                if self.crf_edit.isVisible() and self.crf_edit.text():
+                    command.extend(["-global_quality", self.crf_edit.text()])
+            else:
+                if self.crf_edit.isVisible() and self.crf_edit.text():
+                    command.extend(["-crf", self.crf_edit.text()])
+
             if self.cq_edit.isVisible() and self.cq_edit.text():
                 command.extend(["-cq", self.cq_edit.text()])
+
             if self.video_bitrate_edit.isVisible() and self.video_bitrate_edit.text():
                 command.extend(["-b:v", self.video_bitrate_edit.text()])
             if self.fps_edit.text():
                 command.extend(["-r", self.fps_edit.text()])
-            if self.resolution_edit.text():
-                resolution = self.resolution_edit.text().replace(':', 'x')
-                command.extend(["-s", resolution])
 
         audio_codec = self.audio_codec_combo.currentText()
         command.extend(["-c:a", audio_codec])
@@ -504,7 +520,7 @@ class CommonOperationsTab(BaseTab, Ui_CommonOpsTab):
             if not self.img_input_edit.text() or not os.path.exists(self.img_input_edit.text()):
                 display_error(self.console, "输入的图片文件不存在或未指定。"); return False
             if not self.audio_input_edit.text() or not os.path.exists(self.audio_input_edit.text()):
-                display_error(self.console, "输入的音频文件不存在或未指定。"); return False
+                display_error(self.console, "图声合成的输出路径不能为空。"); return False
             if not self.img_audio_output_edit.text():
                 display_error(self.console, "图声合成的输出路径不能为空。"); return False
         return True
