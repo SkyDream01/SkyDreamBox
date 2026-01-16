@@ -51,7 +51,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.setWindowIcon(QIcon(logo_path))
 
         self.setWindowTitle(APP_NAME)
-        self.setGeometry(50, 50, 750, 900)
+        self.setGeometry(50, 50, 750, 850) # 设置主窗口初始大小
 
         self.initialized_tabs = {}
         self.tab_constructors = {
