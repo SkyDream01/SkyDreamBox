@@ -3,7 +3,7 @@
 
 import os
 import re
-from PySide6.QtWidgets import QWidget, QFileDialog
+from PySide6.QtWidgets import QWidget, QFileDialog, QMessageBox
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
 
@@ -16,6 +16,7 @@ from ui.demuxing_tab_ui import Ui_DemuxingTab
 from ui.common_ops_tab_ui import Ui_CommonOpsTab
 from ui.pro_tab_ui import Ui_ProfessionalTab
 from ui.about_tab_ui import Ui_AboutTab # 导入新的 AboutTab UI
+from ui.settings_tab_ui import Ui_SettingsTab
 
 from utils import (
     VIDEO_FORMATS, VIDEO_FORMAT_CODECS, AUDIO_CODECS_FOR_VIDEO_FORMAT,
@@ -26,6 +27,16 @@ from utils import (
 # constants 和 resource_path 不再在此文件中直接使用，可以移除
 
 # --- Helper Functions ---
+
+def escape_ffmpeg_filter_path(file_path):
+    if not file_path:
+        return file_path
+    # 转义冒号（FFmpeg滤镜分隔符）
+    escaped = file_path.replace(':', '\\\\:')
+    # 如果路径包含空格，用单引号括起来
+    if ' ' in escaped:
+        escaped = f"'{escaped}'"
+    return escaped
 
 def validate_time_format(time_str):
     if not time_str: return True
@@ -207,7 +218,7 @@ class VideoTab(BaseTab, Ui_VideoTab):
         video_filters = []
         
         if subtitle_file:
-            escaped_subtitle_path = subtitle_file.replace(':', '\\\\:')
+            escaped_subtitle_path = escape_ffmpeg_filter_path(subtitle_file)
             video_filters.append(f"subtitles={escaped_subtitle_path}")
 
         video_codec = self.video_codec_combo.currentText()
@@ -459,12 +470,25 @@ class DemuxingTab(BaseTab, Ui_DemuxingTab):
         input_file = self.input_edit.text()
         base, ext = os.path.splitext(input_file)
         
+        try:
+            from config import get_config
+            config = get_config()
+            overwrite = config.get("overwrite_files", True)
+        except ImportError:
+            overwrite = True
+        
         if self.current_stream_type == 'video':
             output_file = f"{base}_video_only{ext}"
-            return ["ffmpeg", "-i", input_file, "-c:v", "copy", "-an", "-y", output_file]
+            if overwrite:
+                return ["ffmpeg", "-i", input_file, "-c:v", "copy", "-an", "-y", output_file]
+            else:
+                return ["ffmpeg", "-i", input_file, "-c:v", "copy", "-an", output_file]
         elif self.current_stream_type == 'audio':
             output_file = f"{base}_audio_only.mka"
-            return ["ffmpeg", "-i", input_file, "-c:a", "copy", "-vn", "-y", output_file]
+            if overwrite:
+                return ["ffmpeg", "-i", input_file, "-c:a", "copy", "-vn", "-y", output_file]
+            else:
+                return ["ffmpeg", "-i", input_file, "-c:a", "copy", "-vn", output_file]
         return None
 
 class CommonOperationsTab(BaseTab, Ui_CommonOpsTab):
@@ -526,6 +550,14 @@ class CommonOperationsTab(BaseTab, Ui_CommonOpsTab):
         return True
 
     def _get_command(self):
+        # 获取覆盖设置
+        try:
+            from config import get_config
+            config = get_config()
+            overwrite = config.get("overwrite_files", True)
+        except ImportError:
+            overwrite = True
+        
         if self.current_command_type == 'trim':
             input_file = self.trim_input_edit.text()
             output_file = self.trim_output_edit.text()
@@ -537,7 +569,11 @@ class CommonOperationsTab(BaseTab, Ui_CommonOpsTab):
                 command.extend(["-ss", start_time])
             if end_time:
                 command.extend(["-to", end_time])
-            command.extend(["-y", output_file])
+            
+            if overwrite:
+                command.extend(["-y", output_file])
+            else:
+                command.append(output_file)
             return command
 
         elif self.current_command_type == 'img_audio':
@@ -550,8 +586,12 @@ class CommonOperationsTab(BaseTab, Ui_CommonOpsTab):
                 "-i", audio_file,
                 "-c:v", "libx264", "-tune", "stillimage",
                 "-c:a", "aac", "-b:a", "192k",
-                "-shortest", "-y", output_file
+                "-shortest"
             ]
+            if overwrite:
+                command.extend(["-y", output_file])
+            else:
+                command.append(output_file)
             return command
         return None
 
@@ -577,6 +617,133 @@ class ProfessionalTab(BaseTab, Ui_ProfessionalTab):
             return shlex.split(command_text)
         except ImportError:
             return command_text.split()
+ 
+# --- 设置选项卡 ---
+class SettingsTab(BaseTab, Ui_SettingsTab):
+    def __init__(self, main_window):
+        super().__init__(main_window)
+        self.setupUi(self)
+        self._connect_signals()
+        self._load_config()
+    
+    def _connect_signals(self):
+        self.ffmpeg_browse_button.clicked.connect(lambda: self._browse_file(self.ffmpeg_path_edit, "选择FFmpeg可执行文件", "Executable Files (*.exe);;All Files (*)"))
+        self.ffprobe_browse_button.clicked.connect(lambda: self._browse_file(self.ffprobe_path_edit, "选择FFprobe可执行文件", "Executable Files (*.exe);;All Files (*)"))
+        self.test_button.clicked.connect(self._test_ffmpeg)
+        self.save_button.clicked.connect(self._save_config)
+        self.reset_button.clicked.connect(self._reset_to_defaults)
+    
+    def _browse_file(self, line_edit, title, filter_str):
+        file_name, _ = QFileDialog.getOpenFileName(self, title, "", filter_str)
+        if file_name:
+            line_edit.setText(file_name)
+    
+    def _load_config(self):
+        try:
+            from config import get_config
+            config = get_config()
+            
+            # FFmpeg路径
+            ffmpeg_path = config.get("ffmpeg_path", "ffmpeg")
+            self.ffmpeg_path_edit.setText(ffmpeg_path if ffmpeg_path != "ffmpeg" else "")
+            
+            # FFprobe路径
+            ffprobe_path = config.get("ffprobe_path", "ffprobe")
+            self.ffprobe_path_edit.setText(ffprobe_path if ffprobe_path != "ffprobe" else "")
+            
+            # 复选框设置
+            self.overwrite_files_check.setChecked(config.get("overwrite_files", True))
+            
+        except ImportError:
+            self.console.append("<font color='#e74c3c'>错误: 配置模块加载失败</font>")
+    
+    def _save_config(self):
+        try:
+            from config import get_config
+            config = get_config()
+            
+            # FFmpeg路径
+            ffmpeg_path = self.ffmpeg_path_edit.text().strip()
+            config.set("ffmpeg_path", ffmpeg_path if ffmpeg_path else "ffmpeg")
+            
+            # FFprobe路径
+            ffprobe_path = self.ffprobe_path_edit.text().strip()
+            config.set("ffprobe_path", ffprobe_path if ffprobe_path else "ffprobe")
+            
+            # 复选框设置
+            config.set("overwrite_files", self.overwrite_files_check.isChecked())
+            
+            # 保存到文件
+            if config.save():
+                self.console.append("<font color='#2ecc71'>设置已保存成功</font>")
+                self.console.append("<font color='#f1c40f'>部分设置需要重启应用才能生效</font>")
+            else:
+                self.console.append("<font color='#e74c3c'>错误: 保存设置失败</font>")
+                
+        except ImportError:
+            self.console.append("<font color='#e74c3c'>错误: 配置模块加载失败</font>")
+    
+    def _test_ffmpeg(self):
+        try:
+            from config import get_config
+            config = get_config()
+            
+            ffmpeg_path = self.ffmpeg_path_edit.text().strip() or "ffmpeg"
+            ffprobe_path = self.ffprobe_path_edit.text().strip() or "ffprobe"
+            
+            self.console.append("<hr><b>测试FFmpeg配置...</b>")
+            
+            # 测试FFmpeg
+            import subprocess
+            try:
+                result = subprocess.run([ffmpeg_path, "-version"], 
+                                       capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    self.console.append(f"<font color='#2ecc71'>✓ FFmpeg 可用: {ffmpeg_path}</font>")
+                    # 提取版本信息
+                    version_line = result.stdout.split('\n')[0] if result.stdout else "未知版本"
+                    self.console.append(f"<font color='#9aace5'>版本: {version_line}</font>")
+                else:
+                    self.console.append(f"<font color='#e74c3c'>✗ FFmpeg 不可用: {ffmpeg_path}</font>")
+                    self.console.append(f"<font color='#e74c3c'>错误: {result.stderr[:200] if result.stderr else '未知错误'}</font>")
+            except (subprocess.SubprocessError, FileNotFoundError) as e:
+                self.console.append(f"<font color='#e74c3c'>✗ FFmpeg 未找到: {ffmpeg_path}</font>")
+                self.console.append(f"<font color='#e74c3c'>错误: {str(e)}</font>")
+            
+            # 测试FFprobe
+            try:
+                result = subprocess.run([ffprobe_path, "-version"], 
+                                       capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    self.console.append(f"<font color='#2ecc71'>✓ FFprobe 可用: {ffprobe_path}</font>")
+                else:
+                    self.console.append(f"<font color='#e67e22'>⚠ FFprobe 不可用: {ffprobe_path}</font>")
+                    self.console.append(f"<font color='#e67e22'>警告: 媒体信息预览功能可能受限</font>")
+            except (subprocess.SubprocessError, FileNotFoundError) as e:
+                self.console.append(f"<font color='#e67e22'>⚠ FFprobe 未找到: {ffprobe_path}</font>")
+                self.console.append(f"<font color='#e67e22'>警告: 媒体信息预览功能可能受限</font>")
+            
+            self.console.append("<b>测试完成</b><hr>")
+            
+        except ImportError as e:
+            self.console.append(f"<font color='#e74c3c'>错误: 测试失败 - {str(e)}</font>")
+    
+    def _reset_to_defaults(self):
+        reply = QMessageBox.question(self, "确认重置", 
+                                    "确定要重置所有设置为默认值吗？",
+                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                    QMessageBox.StandardButton.No)
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            self.ffmpeg_path_edit.clear()
+            self.ffprobe_path_edit.clear()
+            self.overwrite_files_check.setChecked(True)
+            self.console.append("<font color='#2ecc71'>设置已重置为默认值</font>")
+            self.console.append("<font color='#f1c40f'>请点击'保存设置'以应用更改</font>")
+    
+    def set_buttons_enabled(self, enabled):
+        # 设置选项卡没有需要禁用的按钮
+        pass
 
 # --- 修改后的 AboutTab ---
 class AboutTab(BaseTab, Ui_AboutTab):
