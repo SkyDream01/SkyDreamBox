@@ -19,11 +19,12 @@ from ui.main_window_ui import Ui_MainWindow
 from ui.splash_screen_ui import CustomSplashScreen
 from process_handler import ProcessHandler
 from ui_tabs import (
-    VideoTab, AudioTab, MuxingTab, DemuxingTab, CommonOperationsTab, ProfessionalTab, AboutTab
+    VideoTab, AudioTab, MuxingTab, DemuxingTab, CommonOperationsTab, ProfessionalTab, SettingsTab, AboutTab
 )
 from utils import (
     STYLESHEET, PROGRESS_RE, time_str_to_seconds, resource_path, format_media_info
 )
+
 
 class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self, splash=None):
@@ -50,13 +51,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.setWindowIcon(QIcon(logo_path))
 
         self.setWindowTitle(APP_NAME)
-        self.setGeometry(50, 50, 500, 600)
+        self.setGeometry(50, 50, 750, 850) # 设置主窗口初始大小
 
         self.initialized_tabs = {}
         self.tab_constructors = {
             "视频处理": VideoTab, "音频处理": AudioTab, "音视频合并": MuxingTab,
             "音视频分离": DemuxingTab, "常用工具": CommonOperationsTab, "专业命令": ProfessionalTab,
-            "关于": AboutTab
+            "设置": SettingsTab, "关于": AboutTab
         }
         
         self.total_duration_sec = 0
@@ -69,6 +70,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._connect_signals()
 
         self.update_splash("初始化完成，即将启动!", 100)
+
 
     def update_splash(self, message, progress):
         if self.splash:
@@ -215,6 +217,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         except (ValueError, TypeError): fps = 0.0
         status_text = (f"{percentage}% | 帧率: {fps:.1f} | 速度: {speed:.2f}x | 剩余: {eta_str}")
         self.progress_status_label.setText(status_text)
+
 
 
 if __name__ == '__main__':
