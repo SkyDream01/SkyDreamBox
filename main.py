@@ -14,16 +14,19 @@ from PySide6.QtCore import QProcess, Qt, QTimer
 from PySide6.QtGui import QIcon, QPixmap
 
 # --- UI 和逻辑分离 ---
-from constants import APP_NAME
+from constants import APP_NAME, APP_VERSION
+from styles import STYLESHEET
 from ui.main_window_ui import Ui_MainWindow
+
 from ui.splash_screen_ui import CustomSplashScreen
 from process_handler import ProcessHandler
 from ui_tabs import (
     VideoTab, AudioTab, MuxingTab, DemuxingTab, CommonOperationsTab, ProfessionalTab, SettingsTab, AboutTab
 )
 from utils import (
-    STYLESHEET, PROGRESS_RE, time_str_to_seconds, resource_path, format_media_info
+    PROGRESS_RE, time_str_to_seconds, resource_path, format_media_info
 )
+
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -227,7 +230,7 @@ if __name__ == '__main__':
     logo_path = resource_path("assets/logo.png")
     icon_pixmap = QPixmap(logo_path)
     
-    splash = CustomSplashScreen(icon_pixmap, app_name=APP_NAME, version="2.2")
+    splash = CustomSplashScreen(icon_pixmap, app_name=APP_NAME, version=APP_VERSION)
     splash.show()
 
     main_win = MainWindow(splash)

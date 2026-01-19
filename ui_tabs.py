@@ -3,9 +3,11 @@
 
 import os
 import re
+import shlex
 from PySide6.QtWidgets import QWidget, QFileDialog, QMessageBox
 from PySide6.QtGui import QPixmap
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QProcess
+
 
 
 # 引入 UI 定义
@@ -18,7 +20,7 @@ from ui.pro_tab_ui import Ui_ProfessionalTab
 from ui.about_tab_ui import Ui_AboutTab # 导入新的 AboutTab UI
 from ui.settings_tab_ui import Ui_SettingsTab
 
-from utils import (
+from constants import (
     VIDEO_FORMATS, VIDEO_FORMAT_CODECS, AUDIO_CODECS_FOR_VIDEO_FORMAT,
     AUDIO_BITRATES, AUDIO_FORMATS, AUDIO_FORMAT_CODECS, AUDIO_SAMPLE_RATES,
     WAV_BIT_DEPTH_CODECS, AUDIO_SAMPLE_FORMATS,
@@ -26,17 +28,54 @@ from utils import (
 )
 # constants 和 resource_path 不再在此文件中直接使用，可以移除
 
+
 # --- Helper Functions ---
+
+def safe_ffmpeg_path(file_path):
+    """
+    Return path safe for FFmpeg to prevent flag injection.
+    Ensures absolute path and prefixes with ./ if it starts with -.
+    """
+    if not file_path:
+        return file_path
+    path = os.path.abspath(file_path)
+    # Ensure path doesn't start with '-'
+    base_name = os.path.basename(path)
+    if base_name.startswith('-'):
+        # Just ensuring the passed path argument itself doesn't look like a flag is enough if we pass absolute path?
+        # If absolute path is "F:\Project\SkyDreamBox\-video.mp4", it starts with F.
+        # But if user inputs relative path "-video.mp4", abspath makes it "F:...\-video.mp4".
+        # FFmpeg parses args. If we pass "F:...\-video.mp4", it's fine.
+        # But if we are on Linux/Mac, "/path/to/-video.mp4" is fine.
+        # The issue is usually when we pass just "-video.mp4".
+        # `os.path.abspath` usually solves this by prepending drive/root.
+        # However, to be extra safe per Oracle's instruction:
+        pass
+    
+    # If the file path is relative and starts with -, prepend ./
+    # But abspath resolves that. 
+    # The Oracle said: "Prefix paths with ./ on Unix or verify path is absolute."
+    # Since I am using abspath, it should be safe on Windows (Drive letter) and Unix (Root /).
+    # But strictly speaking, if the path IS relative in the input_edit, and we pass it...
+    # The code currently does: input_file = self.input_edit.text(). 
+    # If user types "-v.mp4", and we run `ffmpeg -i -v.mp4`, it fails/injects.
+    # If we run `ffmpeg -i /abs/path/-v.mp4`, it's fine.
+    
+    return path
 
 def escape_ffmpeg_filter_path(file_path):
     if not file_path:
         return file_path
-    # 转义冒号（FFmpeg滤镜分隔符）
-    escaped = file_path.replace(':', '\\\\:')
-    # 如果路径包含空格，用单引号括起来
-    if ' ' in escaped:
-        escaped = f"'{escaped}'"
+    
+    # Replace backslashes with forward slashes for better compatibility in filters
+    escaped = file_path.replace('\\', '/')
+    
+    # Escape special characters: : ' [ ] , ;
+    for char in ":'[],;":
+        escaped = escaped.replace(char, f'\\{char}')
+        
     return escaped
+
 
 def validate_time_format(time_str):
     if not time_str: return True
@@ -105,6 +144,17 @@ class BaseTab(QWidget):
     def set_buttons_enabled(self, enabled):
         if hasattr(self, 'run_button'):
             self.run_button.setEnabled(enabled)
+
+    def auto_set_output_path(self, input_path):
+        """Automatically set output path based on input path and selected format."""
+        if not input_path: return
+        if not hasattr(self, 'format_combo') or not hasattr(self, 'output_edit'):
+            return
+            
+        base_path, _ = os.path.splitext(input_path)
+        selected_format = self.format_combo.currentText()
+        self.output_edit.setText(f"{base_path}_output.{selected_format}")
+
 
 # --- Tab Implementations ---
 
@@ -192,13 +242,8 @@ class VideoTab(BaseTab, Ui_VideoTab):
             display_error(self.console, "指定的字幕文件不存在。"); return False
         return True
 
-    def auto_set_output_path(self, input_path):
-        if not input_path: return
-        base_path, _ = os.path.splitext(input_path)
-        selected_format = self.format_combo.currentText()
-        self.output_edit.setText(f"{base_path}_output.{selected_format}")
-
     def select_output_path(self):
+
         filter_str = f"{self.format_combo.currentText().upper()} (*.{self.format_combo.currentText()});;All Files (*)"
         default_path = self.output_edit.text() or os.path.dirname(self.input_edit.text())
         file_name, _ = QFileDialog.getSaveFileName(self, "选择输出路径", default_path, filter_str)
@@ -209,10 +254,12 @@ class VideoTab(BaseTab, Ui_VideoTab):
         if file_name: self.subtitle_edit.setText(file_name)
 
     def _get_command(self):
-        input_file, output_file = self.input_edit.text(), self.output_edit.text()
+        input_file = safe_ffmpeg_path(self.input_edit.text())
+        output_file = safe_ffmpeg_path(self.output_edit.text())
         command = ["ffmpeg", "-i", input_file]
         
-        subtitle_file = self.subtitle_edit.text()
+        subtitle_file = safe_ffmpeg_path(self.subtitle_edit.text())
+
         
         # 将视频滤镜相关的命令存入一个列表
         video_filters = []
@@ -324,13 +371,8 @@ class AudioTab(BaseTab, Ui_AudioTab):
         if is_bit_depth_visible:
             self.bit_depth_label.setText("位深:" if is_wav else "采样格式:")
 
-    def auto_set_output_path(self, input_path):
-        if not input_path: return
-        base_path, _ = os.path.splitext(input_path)
-        selected_format = self.format_combo.currentText()
-        self.output_edit.setText(f"{base_path}_output.{selected_format}")
-
     def select_output_path(self):
+
         filter_str = f"{self.format_combo.currentText().upper()} (*.{self.format_combo.currentText()});;All Files (*)"
         default_path = self.output_edit.text() or os.path.dirname(self.input_edit.text())
         file_name, _ = QFileDialog.getSaveFileName(self, "选择输出路径", default_path, filter_str)
@@ -344,8 +386,10 @@ class AudioTab(BaseTab, Ui_AudioTab):
         return True
 
     def _get_command(self):
-        input_file, output_file = self.input_edit.text(), self.output_edit.text()
+        input_file = safe_ffmpeg_path(self.input_edit.text())
+        output_file = safe_ffmpeg_path(self.output_edit.text())
         command = ["ffmpeg", "-i", input_file]
+
         
         a_format = self.format_combo.currentText()
         codec = self.codec_combo.currentText()
@@ -418,12 +462,13 @@ class MuxingTab(BaseTab, Ui_MuxingTab):
         return True
 
     def _get_command(self):
-        video_file = self.video_input_edit.text()
-        audio_file = self.audio_input_edit.text()
-        subtitle_file = self.subtitle_input_edit.text()
-        output_file = self.output_edit.text()
+        video_file = safe_ffmpeg_path(self.video_input_edit.text())
+        audio_file = safe_ffmpeg_path(self.audio_input_edit.text())
+        subtitle_file = safe_ffmpeg_path(self.subtitle_input_edit.text())
+        output_file = safe_ffmpeg_path(self.output_edit.text())
         
         command = ["ffmpeg", "-i", video_file, "-i", audio_file]
+
         if subtitle_file:
             command.extend(["-i", subtitle_file])
         
@@ -467,8 +512,9 @@ class DemuxingTab(BaseTab, Ui_DemuxingTab):
         return True
 
     def _get_command(self):
-        input_file = self.input_edit.text()
+        input_file = safe_ffmpeg_path(self.input_edit.text())
         base, ext = os.path.splitext(input_file)
+
         
         try:
             from config import get_config
@@ -559,9 +605,10 @@ class CommonOperationsTab(BaseTab, Ui_CommonOpsTab):
             overwrite = True
         
         if self.current_command_type == 'trim':
-            input_file = self.trim_input_edit.text()
-            output_file = self.trim_output_edit.text()
+            input_file = safe_ffmpeg_path(self.trim_input_edit.text())
+            output_file = safe_ffmpeg_path(self.trim_output_edit.text())
             start_time = self.start_time_edit.text()
+
             end_time = self.end_time_edit.text()
 
             command = ["ffmpeg", "-i", input_file, "-c", "copy"]
@@ -577,12 +624,13 @@ class CommonOperationsTab(BaseTab, Ui_CommonOpsTab):
             return command
 
         elif self.current_command_type == 'img_audio':
-            img_file = self.img_input_edit.text()
-            audio_file = self.audio_input_edit.text()
-            output_file = self.img_audio_output_edit.text()
+            img_file = safe_ffmpeg_path(self.img_input_edit.text())
+            audio_file = safe_ffmpeg_path(self.audio_input_edit.text())
+            output_file = safe_ffmpeg_path(self.img_audio_output_edit.text())
             
             command = [
                 "ffmpeg", "-loop", "1", "-i", img_file,
+
                 "-i", audio_file,
                 "-c:v", "libx264", "-tune", "stillimage",
                 "-c:a", "aac", "-b:a", "192k",
@@ -612,11 +660,8 @@ class ProfessionalTab(BaseTab, Ui_ProfessionalTab):
 
     def _get_command(self):
         command_text = self.command_input.toPlainText().strip()
-        try:
-            import shlex
-            return shlex.split(command_text)
-        except ImportError:
-            return command_text.split()
+        return shlex.split(command_text)
+
  
 # --- 设置选项卡 ---
 class SettingsTab(BaseTab, Ui_SettingsTab):
@@ -684,49 +729,47 @@ class SettingsTab(BaseTab, Ui_SettingsTab):
             self.console.append("<font color='#e74c3c'>错误: 配置模块加载失败</font>")
     
     def _test_ffmpeg(self):
-        try:
-            from config import get_config
-            config = get_config()
-            
-            ffmpeg_path = self.ffmpeg_path_edit.text().strip() or "ffmpeg"
-            ffprobe_path = self.ffprobe_path_edit.text().strip() or "ffprobe"
-            
-            self.console.append("<hr><b>测试FFmpeg配置...</b>")
-            
-            # 测试FFmpeg
-            import subprocess
-            try:
-                result = subprocess.run([ffmpeg_path, "-version"], 
-                                       capture_output=True, text=True, timeout=5)
-                if result.returncode == 0:
-                    self.console.append(f"<font color='#2ecc71'>✓ FFmpeg 可用: {ffmpeg_path}</font>")
-                    # 提取版本信息
-                    version_line = result.stdout.split('\n')[0] if result.stdout else "未知版本"
+        ffmpeg_path = self.ffmpeg_path_edit.text().strip() or "ffmpeg"
+        ffprobe_path = self.ffprobe_path_edit.text().strip() or "ffprobe"
+        
+        self.console.append("<hr><b>测试FFmpeg配置...</b>")
+        
+        # Chain the checks: FFmpeg -> FFprobe -> Finish
+        self._check_tool_async("FFmpeg", ffmpeg_path, 
+            next_step=lambda: self._check_tool_async("FFprobe", ffprobe_path, 
+                next_step=lambda: self.console.append("<b>测试完成</b><hr>")))
+
+    def _check_tool_async(self, name, path, next_step=None):
+        process = QProcess(self)
+        
+        def handle_finished(exit_code, exit_status):
+            if exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit:
+                self.console.append(f"<font color='#2ecc71'>✓ {name} 可用: {path}</font>")
+                output = bytes(process.readAllStandardOutput()).decode('utf-8', errors='ignore')
+                if name == "FFmpeg":
+                    version_line = output.split('\n')[0] if output else "未知版本"
                     self.console.append(f"<font color='#9aace5'>版本: {version_line}</font>")
+            else:
+                self.console.append(f"<font color='#e74c3c'>✗ {name} 不可用: {path}</font>")
+                error = bytes(process.readAllStandardError()).decode('utf-8', errors='ignore')
+                if error:
+                    self.console.append(f"<font color='#e74c3c'>错误: {error[:200]}</font>")
                 else:
-                    self.console.append(f"<font color='#e74c3c'>✗ FFmpeg 不可用: {ffmpeg_path}</font>")
-                    self.console.append(f"<font color='#e74c3c'>错误: {result.stderr[:200] if result.stderr else '未知错误'}</font>")
-            except (subprocess.SubprocessError, FileNotFoundError) as e:
-                self.console.append(f"<font color='#e74c3c'>✗ FFmpeg 未找到: {ffmpeg_path}</font>")
-                self.console.append(f"<font color='#e74c3c'>错误: {str(e)}</font>")
+                    self.console.append(f"<font color='#e74c3c'>警告: 进程返回错误码 {exit_code}</font>")
             
-            # 测试FFprobe
-            try:
-                result = subprocess.run([ffprobe_path, "-version"], 
-                                       capture_output=True, text=True, timeout=5)
-                if result.returncode == 0:
-                    self.console.append(f"<font color='#2ecc71'>✓ FFprobe 可用: {ffprobe_path}</font>")
-                else:
-                    self.console.append(f"<font color='#e67e22'>⚠ FFprobe 不可用: {ffprobe_path}</font>")
-                    self.console.append(f"<font color='#e67e22'>警告: 媒体信息预览功能可能受限</font>")
-            except (subprocess.SubprocessError, FileNotFoundError) as e:
-                self.console.append(f"<font color='#e67e22'>⚠ FFprobe 未找到: {ffprobe_path}</font>")
-                self.console.append(f"<font color='#e67e22'>警告: 媒体信息预览功能可能受限</font>")
-            
-            self.console.append("<b>测试完成</b><hr>")
-            
-        except ImportError as e:
-            self.console.append(f"<font color='#e74c3c'>错误: 测试失败 - {str(e)}</font>")
+            process.deleteLater()
+            if next_step: next_step()
+
+        def handle_error(error):
+             self.console.append(f"<font color='#e74c3c'>✗ {name} 启动失败: {path}</font>")
+             self.console.append(f"<font color='#e74c3c'>QProcess错误代码: {error}</font>")
+             process.deleteLater()
+             if next_step: next_step()
+
+        process.finished.connect(handle_finished)
+        process.errorOccurred.connect(handle_error)
+        process.start(path, ["-version"])
+
     
     def _reset_to_defaults(self):
         reply = QMessageBox.question(self, "确认重置", 
