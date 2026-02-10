@@ -151,14 +151,26 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 tab.set_buttons_enabled(enabled)
 
     def _on_probe_finished(self):
-        output = self.process_handler.ffprobe_process.readAllStandardOutput().data().decode('utf-8', 'ignore')
+        process = self.process_handler.ffprobe_process
+        if process is None:
+            return
+        
         try:
+            output = process.readAllStandardOutput().data().decode('utf-8', 'ignore')
+            if not output:
+                self.info_label.setText("<font color='#f1c40f'>无法读取媒体信息: 输出为空</font>")
+                self.total_duration_sec = 0
+                return
+                
             data = json.loads(output)
             self.info_label.setText(format_media_info(data))
             if 'format' in data and 'duration' in data['format']:
                 self.total_duration_sec = float(data['format']['duration'])
-        except (json.JSONDecodeError, KeyError, TypeError) as e:
-            self.info_label.setText(f"<font color='#f1c40f'>无法解析媒体信息: {e}</font>")
+        except json.JSONDecodeError as e:
+            self.info_label.setText(f"<font color='#f1c40f'>无法解析媒体信息: JSON格式错误 ({e})</font>")
+            self.total_duration_sec = 0
+        except (KeyError, TypeError, ValueError) as e:
+            self.info_label.setText(f"<font color='#f1c40f'>无法解析媒体信息: 数据格式错误 ({e})</font>")
             self.total_duration_sec = 0
 
     def _on_process_finished(self, exit_code, exit_status):

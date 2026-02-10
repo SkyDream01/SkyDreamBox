@@ -1,10 +1,58 @@
 # -*- coding: utf-8 -*-
 # SkyDreamBox/constants.py
+# 应用常量定义
 
+# =============================================================================
+# 应用信息
+# =============================================================================
 APP_NAME = "SkyDreamBox - 天梦工具箱"
 APP_VERSION = "2.3.0"
 AUTHOR = "Tensin"
 GITHUB_URL = "https://github.com/SkyDream01/SkyDreamBox"
+
+# =============================================================================
+# FFmpeg 相关常量
+# =============================================================================
+DEFAULT_FFMPEG_PATH = "ffmpeg"
+DEFAULT_FFPROBE_PATH = "ffprobe"
+FFMPEG_TIMEOUT_MS = 5000  # FFmpeg 检查超时时间（毫秒）
+FFPROBE_TIMEOUT_MS = 5000  # FFprobe 检查超时时间（毫秒）
+PROCESS_TERMINATE_TIMEOUT_MS = 3000  # 进程终止等待超时（毫秒）
+PROCESS_KILL_TIMEOUT_MS = 1000  # 进程强制结束等待超时（毫秒）
+
+# =============================================================================
+# 默认配置值
+# =============================================================================
+DEFAULT_OVERWRITE_FILES = True
+DEFAULT_AUDIO_BITRATE = "192k"
+DEFAULT_COMPRESSION_LEVEL = "5"
+DEFAULT_SAMPLE_RATE = "(默认)"
+
+# =============================================================================
+# 验证相关常量
+# =============================================================================
+CRF_MIN = 0
+CRF_MAX = 51
+CQ_MIN = 0
+CQ_MAX = 51
+FPS_MIN = 0.1
+
+# =============================================================================
+# UI 相关常量
+# =============================================================================
+WINDOW_MIN_WIDTH = 750
+WINDOW_MIN_HEIGHT = 850
+SPLASH_WIDTH = 450
+SPLASH_HEIGHT = 350
+PROGRESS_BAR_MAX = 100
+
+# =============================================================================
+# 文件过滤器
+# =============================================================================
+FILE_FILTER_ALL = "All Files (*)"
+FILE_FILTER_EXECUTABLE = "Executable Files (*.exe)"
+FILE_FILTER_IMAGE = "Image Files (*.png *.jpg *.jpeg *.bmp)"
+FILE_FILTER_MEDIA = "Media Files (*.mp4 *.mkv)"
 
 VIDEO_FORMAT_CODECS = {
     "mp4": ["libx264", "h264_nvenc", "h264_amf", "h264_qsv", "libx265", "hevc_nvenc", "hevc_amf", "hevc_qsv", "libaom-av1", "copy"],

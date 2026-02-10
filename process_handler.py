@@ -14,9 +14,38 @@ except ImportError:
     CONFIG = None
 
 class ProcessHandler:
+    """FFmpeg/FFprobe 进程管理器
+    
+    负责管理 FFmpeg 和 FFprobe 进程的创建、执行和清理。
+    确保进程资源正确释放，避免僵尸进程。
+    """
+    
     def __init__(self, parent=None):
+        self._parent = parent
         self.ffmpeg_process = QProcess(parent)
         self.ffprobe_process = QProcess(parent)
+        self._setup_process_cleanup(self.ffmpeg_process)
+        self._setup_process_cleanup(self.ffprobe_process)
+    
+    def _setup_process_cleanup(self, process):
+        """设置进程清理机制"""
+        process.finished.connect(lambda: self._on_process_finished(process))
+    
+    def _on_process_finished(self, process):
+        """进程结束时的清理工作"""
+        # 确保进程资源被释放
+        if process.state() == QProcess.ProcessState.NotRunning:
+            process.close()
+    
+    def terminate_all(self):
+        """终止所有正在运行的进程"""
+        for process in [self.ffmpeg_process, self.ffprobe_process]:
+            if self._is_process_active(process):
+                process.terminate()
+                if not process.waitForFinished(5000):
+                    process.kill()
+                    process.waitForFinished(1000)
+                process.close()
     
     def _get_ffmpeg_path(self):
         """获取FFmpeg可执行文件路径"""
@@ -68,8 +97,13 @@ class ProcessHandler:
         
         return True, "FFmpeg 和 FFprobe 均已找到。"
 
+    def _is_process_active(self, process):
+        """检查进程是否处于活动状态（正在启动或运行中）"""
+        state = process.state()
+        return state in (QProcess.ProcessState.Starting, QProcess.ProcessState.Running)
+    
     def run_ffmpeg(self, command_list):
-        if self.ffmpeg_process.state() == QProcess.ProcessState.Running:
+        if self._is_process_active(self.ffmpeg_process):
             return False, "错误: 当前已有任务在运行中。"
         
         ffmpeg_path = self._get_ffmpeg_path()
@@ -98,8 +132,11 @@ class ProcessHandler:
         return True, f"执行: {original_command_to_display}"
 
     def run_ffprobe(self, file_path):
-        if self.ffprobe_process.state() == QProcess.ProcessState.Running:
-            self.ffprobe_process.kill()
+        if self._is_process_active(self.ffprobe_process):
+            self.ffprobe_process.terminate()
+            if not self.ffprobe_process.waitForFinished(3000):
+                self.ffprobe_process.kill()
+                self.ffprobe_process.waitForFinished(1000)
             
         ffprobe_path = self._get_ffprobe_path()
         command = [

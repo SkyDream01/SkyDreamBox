@@ -6,6 +6,16 @@ import os
 import json
 import sys
 from pathlib import Path
+from typing import Optional, Any, Dict
+
+from constants import (
+    DEFAULT_FFMPEG_PATH, DEFAULT_FFPROBE_PATH, DEFAULT_OVERWRITE_FILES,
+    FFMPEG_TIMEOUT_MS
+)
+from logger import get_logger
+
+logger = get_logger()
+
 
 class Config:
     """配置管理类"""
@@ -29,15 +39,15 @@ class Config:
         app_config_dir.mkdir(exist_ok=True)
         return app_config_dir
     
-    def _load_defaults(self):
+    def _load_defaults(self) -> None:
         """加载默认配置"""
-        self._config = {
-            "ffmpeg_path": "ffmpeg",  # 默认使用系统PATH
-            "ffprobe_path": "ffprobe",
-            "overwrite_files": True,  # 是否覆盖已存在的文件
+        self._config: Dict[str, Any] = {
+            "ffmpeg_path": DEFAULT_FFMPEG_PATH,
+            "ffprobe_path": DEFAULT_FFPROBE_PATH,
+            "overwrite_files": DEFAULT_OVERWRITE_FILES,
         }
     
-    def load(self):
+    def load(self) -> bool:
         """从配置文件加载配置"""
         try:
             if self.config_file.exists():
@@ -47,19 +57,23 @@ class Config:
                     for key, value in loaded_config.items():
                         if key in self._config:
                             self._config[key] = value
+                logger.info(f"配置文件已加载: {self.config_file}")
                 return True
-        except (json.JSONDecodeError, IOError) as e:
-            print(f"加载配置文件失败: {e}")
+        except json.JSONDecodeError as e:
+            logger.error(f"配置文件格式错误: {e}")
+        except IOError as e:
+            logger.error(f"加载配置文件失败: {e}")
         return False
     
-    def save(self):
+    def save(self) -> bool:
         """保存配置到文件"""
         try:
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(self._config, f, ensure_ascii=False, indent=2)
+            logger.info(f"配置文件已保存: {self.config_file}")
             return True
         except IOError as e:
-            print(f"保存配置文件失败: {e}")
+            logger.error(f"保存配置文件失败: {e}")
         return False
     
     def get(self, key, default=None):
@@ -70,20 +84,20 @@ class Config:
         """设置配置值"""
         self._config[key] = value
     
-    def get_ffmpeg_path(self):
+    def get_ffmpeg_path(self) -> str:
         """获取FFmpeg路径（支持自定义路径）"""
-        path = self.get("ffmpeg_path", "ffmpeg")
+        path = self.get("ffmpeg_path", DEFAULT_FFMPEG_PATH)
         # 如果路径为空或为默认值，返回默认命令
-        if not path or path == "ffmpeg":
-            return "ffmpeg"
+        if not path or path == DEFAULT_FFMPEG_PATH:
+            return DEFAULT_FFMPEG_PATH
         # 确保路径是字符串
         return str(path)
     
-    def get_ffprobe_path(self):
+    def get_ffprobe_path(self) -> str:
         """获取FFprobe路径（支持自定义路径）"""
-        path = self.get("ffprobe_path", "ffprobe")
-        if not path or path == "ffprobe":
-            return "ffprobe"
+        path = self.get("ffprobe_path", DEFAULT_FFPROBE_PATH)
+        if not path or path == DEFAULT_FFPROBE_PATH:
+            return DEFAULT_FFPROBE_PATH
         return str(path)
     
     def validate_ffmpeg_path(self, path):

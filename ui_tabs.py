@@ -4,62 +4,82 @@
 import os
 import re
 import shlex
+from typing import Optional
+
 from PySide6.QtWidgets import QWidget, QFileDialog, QMessageBox
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt, QProcess
 
-
-
-# 引入 UI 定义
 from ui.video_tab_ui import Ui_VideoTab
 from ui.audio_tab_ui import Ui_AudioTab
 from ui.muxing_tab_ui import Ui_MuxingTab
 from ui.demuxing_tab_ui import Ui_DemuxingTab
 from ui.common_ops_tab_ui import Ui_CommonOpsTab
 from ui.pro_tab_ui import Ui_ProfessionalTab
-from ui.about_tab_ui import Ui_AboutTab # 导入新的 AboutTab UI
+from ui.about_tab_ui import Ui_AboutTab
 from ui.settings_tab_ui import Ui_SettingsTab
 
 from constants import (
     VIDEO_FORMATS, VIDEO_FORMAT_CODECS, AUDIO_CODECS_FOR_VIDEO_FORMAT,
     AUDIO_BITRATES, AUDIO_FORMATS, AUDIO_FORMAT_CODECS, AUDIO_SAMPLE_RATES,
     WAV_BIT_DEPTH_CODECS, AUDIO_SAMPLE_FORMATS,
-    SUBTITLE_FORMATS, DEFAULT_COMPRESSION_LEVEL, RESOLUTION_PRESETS
+    SUBTITLE_FORMATS, DEFAULT_COMPRESSION_LEVEL, RESOLUTION_PRESETS,
+    FILE_FILTER_ALL, FILE_FILTER_IMAGE
 )
-# constants 和 resource_path 不再在此文件中直接使用，可以移除
+from validators import (
+    ValidationResult,
+    validate_time_format, validate_crf, validate_cq, validate_fps,
+    validate_resolution, validate_bitrate, validate_file_path, validate_output_path,
+    is_valid_time, is_valid_crf, is_valid_cq, is_valid_fps,
+    is_valid_resolution, is_valid_bitrate
+)
+from logger import get_logger
+
+logger = get_logger()
 
 
 # --- Helper Functions ---
 
 def safe_ffmpeg_path(file_path):
     """
-    Return path safe for FFmpeg to prevent flag injection.
-    Ensures absolute path and prefixes with ./ if it starts with -.
+    返回 FFmpeg 安全的路径，防止命令注入攻击。
+    
+    安全措施：
+    1. 转换为绝对路径
+    2. 验证路径不包含空字符
+    3. 验证路径不以 - 开头（防止被解析为命令行参数）
+    4. 验证路径是常规文件路径
+    
+    Args:
+        file_path: 输入的文件路径
+        
+    Returns:
+        str: 安全的绝对路径
+        
+    Raises:
+        ValueError: 如果路径包含潜在的安全风险
     """
     if not file_path:
         return file_path
+    
+    # 检查空字符注入
+    if '\x00' in file_path:
+        raise ValueError("路径包含非法空字符")
+    
+    # 转换为绝对路径
     path = os.path.abspath(file_path)
-    # Ensure path doesn't start with '-'
+    
+    # 检查路径是否以 - 开头（防止命令行参数注入）
+    # 即使是绝对路径，也需要检查 basename
     base_name = os.path.basename(path)
     if base_name.startswith('-'):
-        # Just ensuring the passed path argument itself doesn't look like a flag is enough if we pass absolute path?
-        # If absolute path is "F:\Project\SkyDreamBox\-video.mp4", it starts with F.
-        # But if user inputs relative path "-video.mp4", abspath makes it "F:...\-video.mp4".
-        # FFmpeg parses args. If we pass "F:...\-video.mp4", it's fine.
-        # But if we are on Linux/Mac, "/path/to/-video.mp4" is fine.
-        # The issue is usually when we pass just "-video.mp4".
-        # `os.path.abspath` usually solves this by prepending drive/root.
-        # However, to be extra safe per Oracle's instruction:
-        pass
+        raise ValueError(f"文件名不能以 '-' 开头: {base_name}")
     
-    # If the file path is relative and starts with -, prepend ./
-    # But abspath resolves that. 
-    # The Oracle said: "Prefix paths with ./ on Unix or verify path is absolute."
-    # Since I am using abspath, it should be safe on Windows (Drive letter) and Unix (Root /).
-    # But strictly speaking, if the path IS relative in the input_edit, and we pass it...
-    # The code currently does: input_file = self.input_edit.text(). 
-    # If user types "-v.mp4", and we run `ffmpeg -i -v.mp4`, it fails/injects.
-    # If we run `ffmpeg -i /abs/path/-v.mp4`, it's fine.
+    # 检查常见的命令注入模式
+    dangerous_patterns = [';', '&', '|', '`', '$', '(', ')', '<', '>']
+    for pattern in dangerous_patterns:
+        if pattern in base_name:
+            raise ValueError(f"路径包含非法字符 '{pattern}': {base_name}")
     
     return path
 
@@ -105,8 +125,10 @@ def validate_bitrate(br_str):
     if not br_str: return True
     return re.fullmatch(r'\d+[kKmM]?', br_str) is not None
 
-def display_error(console, message):
+def display_error(console, message: str) -> None:
+    """在控制台显示错误信息"""
     console.append(f"<font color='#e74c3c'><b>输入错误:</b> {message}</font>")
+    logger.warning(f"输入验证错误: {message}")
 
 # --- Base Tab Class ---
 
