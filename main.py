@@ -14,7 +14,9 @@ from PySide6.QtCore import QProcess, Qt, QTimer
 from PySide6.QtGui import QIcon, QPixmap
 
 # --- UI 和逻辑分离 ---
-from constants import APP_NAME, APP_VERSION
+from constants import (APP_NAME, APP_VERSION, MAX_CONSOLE_LINES,
+                       SPLASH_FINISH_DELAY_SEC, WINDOW_POSITION_X, WINDOW_POSITION_Y,
+                       WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
 from styles import STYLESHEET
 from ui.main_window_ui import Ui_MainWindow
 
@@ -26,6 +28,7 @@ from ui_tabs import (
 from utils import (
     PROGRESS_RE, time_str_to_seconds, resource_path, format_media_info
 )
+from logger import setup_logger
 
 
 
@@ -54,7 +57,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.setWindowIcon(QIcon(logo_path))
 
         self.setWindowTitle(APP_NAME)
-        self.setGeometry(50, 50, 750, 850) # 设置主窗口初始大小
+        self.setGeometry(WINDOW_POSITION_X, WINDOW_POSITION_Y, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
 
         self.initialized_tabs = {}
         self.tab_constructors = {
@@ -80,7 +83,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.splash.showMessage(message)
             self.splash.setProgress(progress)
             if progress == 100:
-                time.sleep(0.3)
+                time.sleep(SPLASH_FINISH_DELAY_SEC)
 
     def _show_ffmpeg_error_and_exit(self, message):
         error_box = QMessageBox(self)
@@ -111,6 +114,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.tabs.setCurrentIndex(index)
 
     def _connect_signals(self):
+        self.console.document().setMaximumBlockCount(MAX_CONSOLE_LINES)
         self.process_handler.ffmpeg_process.readyReadStandardOutput.connect(self._handle_stdout)
         self.process_handler.ffmpeg_process.readyReadStandardError.connect(self._handle_stderr)
         self.process_handler.ffmpeg_process.finished.connect(self._on_process_finished)
@@ -128,7 +132,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.reset_media_info()
         self.reset_progress_display()
         target_line_edit.setText(file_name)
-        self.process_handler.run_ffprobe(file_name)
+        success, error_msg = self.process_handler.run_ffprobe(file_name)
+        if not success:
+            self.info_label.setText(f"<font color='#e74c3c'>媒体信息获取失败: {error_msg}</font>")
 
         current_tab_index = self.tabs.currentIndex()
         if current_tab_index in self.initialized_tabs:
@@ -236,6 +242,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
 
 if __name__ == '__main__':
+    setup_logger()
     app = QApplication(sys.argv)
     app.setStyleSheet(STYLESHEET)
     

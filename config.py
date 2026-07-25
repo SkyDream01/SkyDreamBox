@@ -53,10 +53,13 @@ class Config:
             if self.config_file.exists():
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     loaded_config = json.load(f)
-                    # 合并配置，保留默认值中未在文件中定义的键
                     for key, value in loaded_config.items():
                         if key in self._config:
-                            self._config[key] = value
+                            expected_type = type(self._config[key])
+                            if isinstance(value, expected_type):
+                                self._config[key] = value
+                            else:
+                                logger.warning(f"配置项 '{key}' 类型不匹配，使用默认值")
                 logger.info(f"配置文件已加载: {self.config_file}")
                 return True
         except json.JSONDecodeError as e:
@@ -82,6 +85,11 @@ class Config:
     
     def set(self, key, value):
         """设置配置值"""
+        if key not in self._config:
+            raise KeyError(f"未知配置项: {key}")
+        expected_type = type(self._config[key])
+        if not isinstance(value, expected_type):
+            raise TypeError(f"配置项 '{key}' 类型错误: 期望 {expected_type.__name__}, 实际 {type(value).__name__}")
         self._config[key] = value
     
     def get_ffmpeg_path(self) -> str:
@@ -123,7 +131,7 @@ class Config:
         if isinstance(path, str):
             path_obj = Path(path)
             if path_obj.exists() and path_obj.is_file():
-                return self._check_executable(path, is_ffprobe=True)
+                return self._check_executable(path)
         
         return False
     
@@ -141,17 +149,12 @@ class Config:
         except (subprocess.SubprocessError, FileNotFoundError):
             return False
     
-    def _check_executable(self, path, is_ffprobe=False):
+    def _check_executable(self, path):
         """检查可执行文件是否有效"""
         import subprocess
         try:
-            if is_ffprobe:
-                cmd = [str(path), "-version"]
-            else:
-                cmd = [str(path), "-version"]
-            
             result = subprocess.run(
-                cmd,
+                [str(path), "-version"],
                 capture_output=True,
                 text=True,
                 timeout=5

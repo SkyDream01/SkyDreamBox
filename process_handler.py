@@ -13,6 +13,9 @@ except ImportError:
     # 回退到默认值（兼容性）
     CONFIG = None
 
+from constants import (PROCESS_TERMINATE_TIMEOUT_MS, PROCESS_KILL_TIMEOUT_MS,
+                       FFMPEG_TIMEOUT_MS, FFPROBE_TIMEOUT_MS)
+
 class ProcessHandler:
     """FFmpeg/FFprobe 进程管理器
     
@@ -42,9 +45,9 @@ class ProcessHandler:
         for process in [self.ffmpeg_process, self.ffprobe_process]:
             if self._is_process_active(process):
                 process.terminate()
-                if not process.waitForFinished(5000):
+                if not process.waitForFinished(PROCESS_TERMINATE_TIMEOUT_MS):
                     process.kill()
-                    process.waitForFinished(1000)
+                    process.waitForFinished(PROCESS_KILL_TIMEOUT_MS)
                 process.close()
     
     def _get_ffmpeg_path(self):
@@ -74,7 +77,7 @@ class ProcessHandler:
             else:
                 return False, "错误: FFmpeg未在系统PATH中找到。\n\n请确保您已正确安装FFmpeg，并将其路径添加至系统环境变量中。"
 
-        if not process.waitForFinished(5000):  # 5秒超时
+        if not process.waitForFinished(FFMPEG_TIMEOUT_MS):
             process.kill()
             return False, "错误: FFmpeg响应超时，无法获取版本信息。"
 
@@ -84,14 +87,14 @@ class ProcessHandler:
         # 检查FFprobe（可选，但建议）
         process2 = QProcess()
         process2.start(ffprobe_path, ['-version'])
-        
+
         if not process2.waitForStarted():
             if ffprobe_path != "ffprobe":
                 return True, f"FFmpeg 已找到，但FFprobe在指定路径未找到: {ffprobe_path}\n\n部分功能可能受限。"
             else:
                 return True, "FFmpeg 已找到，但FFprobe未在系统PATH中找到。\n\n媒体信息预览功能可能受限。"
-        
-        if not process2.waitForFinished(5000):
+
+        if not process2.waitForFinished(FFPROBE_TIMEOUT_MS):
             process2.kill()
             return True, "FFmpeg 已找到，但FFprobe响应超时。\n\n媒体信息预览功能可能受限。"
         
@@ -132,18 +135,33 @@ class ProcessHandler:
         return True, f"执行: {original_command_to_display}"
 
     def run_ffprobe(self, file_path):
-        if self._is_process_active(self.ffprobe_process):
-            self.ffprobe_process.terminate()
-            if not self.ffprobe_process.waitForFinished(3000):
-                self.ffprobe_process.kill()
-                self.ffprobe_process.waitForFinished(1000)
-            
-        ffprobe_path = self._get_ffprobe_path()
-        command = [
-            "-v", "quiet", 
-            "-print_format", "json", 
-            "-show_format", 
-            "-show_streams", 
-            file_path
-        ]
-        self.ffprobe_process.start(ffprobe_path, command)
+        """运行 ffprobe 获取媒体信息
+
+        Returns:
+            tuple[bool, str]: (是否成功, 错误消息)
+        """
+        try:
+            if self._is_process_active(self.ffprobe_process):
+                self.ffprobe_process.terminate()
+                if not self.ffprobe_process.waitForFinished(PROCESS_TERMINATE_TIMEOUT_MS):
+                    self.ffprobe_process.kill()
+                    self.ffprobe_process.waitForFinished(PROCESS_KILL_TIMEOUT_MS)
+
+            if not file_path or not isinstance(file_path, str):
+                return False, "无效的文件路径"
+
+            if '\x00' in file_path:
+                return False, "路径包含非法空字符"
+
+            ffprobe_path = self._get_ffprobe_path()
+            command = [
+                "-v", "quiet",
+                "-print_format", "json",
+                "-show_format",
+                "-show_streams",
+                file_path
+            ]
+            self.ffprobe_process.start(ffprobe_path, command)
+            return True, ""
+        except (OSError, RuntimeError) as e:
+            return False, f"启动 ffprobe 失败: {e}"

@@ -2,7 +2,6 @@
 # SkyDreamBox/ui_tabs.py
 
 import os
-import re
 import shlex
 from typing import Optional
 
@@ -96,34 +95,6 @@ def escape_ffmpeg_filter_path(file_path):
         
     return escaped
 
-
-def validate_time_format(time_str):
-    if not time_str: return True
-    return re.fullmatch(r'\d{1,2}:\d{2}:\d{2}(\.\d+)?', time_str) is not None
-
-def validate_crf(crf_str):
-    if not crf_str: return True
-    return crf_str.isdigit() and 0 <= int(crf_str) <= 51
-
-def validate_cq(cq_str):
-    if not cq_str: return True
-    return cq_str.isdigit() and 0 <= int(cq_str) <= 51
-
-def validate_fps(fps_str):
-    if not fps_str: return True
-    try:
-        return float(fps_str) > 0
-    except ValueError:
-        return False
-
-def validate_resolution(res_str):
-    if not res_str: return True
-    # --- 修改: 统一使用冒号作为分隔符 ---
-    return re.fullmatch(r'\d+:-?\d+', res_str) is not None
-
-def validate_bitrate(br_str):
-    if not br_str: return True
-    return re.fullmatch(r'\d+[kKmM]?', br_str) is not None
 
 def display_error(console, message: str) -> None:
     """在控制台显示错误信息"""
@@ -250,15 +221,15 @@ class VideoTab(BaseTab, Ui_VideoTab):
             display_error(self.console, "输入视频文件不存在或未指定。"); return False
         if not self.output_edit.text():
             display_error(self.console, "输出文件路径不能为空。"); return False
-        if self.crf_edit.isVisible() and not validate_crf(self.crf_edit.text()):
+        if self.crf_edit.isVisible() and not is_valid_crf(self.crf_edit.text()):
             display_error(self.console, f"无效的CRF值: {self.crf_edit.text()} (应为0-51的整数)"); return False
-        if self.cq_edit.isVisible() and not validate_cq(self.cq_edit.text()):
+        if self.cq_edit.isVisible() and not is_valid_cq(self.cq_edit.text()):
             display_error(self.console, f"无效的CQ值: {self.cq_edit.text()} (应为0-51的整数)"); return False
-        if not validate_fps(self.fps_edit.text()):
+        if not is_valid_fps(self.fps_edit.text()):
             display_error(self.console, f"无效的FPS值: {self.fps_edit.text()}"); return False
-        if not validate_resolution(self.resolution_edit.text()):
+        if not is_valid_resolution(self.resolution_edit.text()):
             display_error(self.console, f"无效的分辨率格式: {self.resolution_edit.text()} (应为 宽度:高度)"); return False
-        if self.video_bitrate_edit.isVisible() and not validate_bitrate(self.video_bitrate_edit.text()):
+        if self.video_bitrate_edit.isVisible() and not is_valid_bitrate(self.video_bitrate_edit.text()):
             display_error(self.console, f"无效的视频比特率: {self.video_bitrate_edit.text()}"); return False
         if self.subtitle_edit.text() and not os.path.exists(self.subtitle_edit.text()):
             display_error(self.console, "指定的字幕文件不存在。"); return False
@@ -604,9 +575,9 @@ class CommonOperationsTab(BaseTab, Ui_CommonOpsTab):
                 display_error(self.console, "截取输入的视频文件不存在或未指定。"); return False
             if not self.trim_output_edit.text():
                 display_error(self.console, "截取输出的文件路径不能为空。"); return False
-            if not validate_time_format(self.start_time_edit.text()):
+            if not is_valid_time(self.start_time_edit.text()):
                 display_error(self.console, f"无效的开始时间格式: {self.start_time_edit.text()}"); return False
-            if not validate_time_format(self.end_time_edit.text()):
+            if not is_valid_time(self.end_time_edit.text()):
                 display_error(self.console, f"无效的结束时间格式: {self.end_time_edit.text()}"); return False
         elif self.current_command_type == 'img_audio':
             if not self.img_input_edit.text() or not os.path.exists(self.img_input_edit.text()):
@@ -665,6 +636,28 @@ class CommonOperationsTab(BaseTab, Ui_CommonOpsTab):
             return command
         return None
 
+_DANGEROUS_PROTOCOLS = ('http://', 'https://', 'ftp://', 'smb://', 'ssh://',
+                         'pipe:', 'crypto:', 'ffhttp:', 'tcp:', 'udp:', 'gopher://')
+_DANGEROUS_FILTERS = ('sendcmd', 'zticker', 'exec', 'system', 'aselect',
+                      'metadata', 'dvbsub', 'dvb_teletext')
+
+
+def _check_command_safety(command_text: str) -> tuple[bool, str]:
+    """检查命令是否包含危险操作"""
+    text_lower = command_text.lower().strip()
+
+    for protocol in _DANGEROUS_PROTOCOLS:
+        if protocol in text_lower:
+            return False, f"检测到危险协议 '{protocol}'，已阻止执行"
+
+    if '-filter' in text_lower:
+        for filt in _DANGEROUS_FILTERS:
+            if filt in text_lower:
+                return False, f"检测到危险滤镜/功能 '{filt}'，已阻止执行"
+
+    return True, ""
+
+
 class ProfessionalTab(BaseTab, Ui_ProfessionalTab):
     def __init__(self, main_window):
         super().__init__(main_window)
@@ -673,10 +666,15 @@ class ProfessionalTab(BaseTab, Ui_ProfessionalTab):
 
     def _connect_signals(self):
         self.run_button.clicked.connect(self._run_command)
-    
+
     def _validate_inputs(self):
-        if not self.command_input.toPlainText().strip():
+        command_text = self.command_input.toPlainText().strip()
+        if not command_text:
             display_error(self.console, "命令不能为空。")
+            return False
+        is_safe, reason = _check_command_safety(command_text)
+        if not is_safe:
+            display_error(self.console, reason)
             return False
         return True
 

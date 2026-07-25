@@ -45,6 +45,10 @@ WINDOW_MIN_HEIGHT = 850
 SPLASH_WIDTH = 450
 SPLASH_HEIGHT = 350
 PROGRESS_BAR_MAX = 100
+MAX_CONSOLE_LINES = 2000
+SPLASH_FINISH_DELAY_SEC = 0.3
+WINDOW_POSITION_X = 50
+WINDOW_POSITION_Y = 50
 
 # =============================================================================
 # 文件过滤器
