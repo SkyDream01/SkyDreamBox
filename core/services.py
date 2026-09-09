@@ -149,7 +149,8 @@ class EngineService(QObject):
                     self.hardware[codec] = success
                     self.updated.emit()
                     next_hardware()
-                self._run(self.config.get_ffmpeg_path(), ["-v", "error", "-f", "lavfi", "-i", "color=size=128x128:rate=1", "-frames:v", "1", "-c:v", codec, "-f", "null", "-"], tested)
+                # Small frames can fall below hardware encoder minimum dimensions.
+                self._run(self.config.get_ffmpeg_path(), ["-v", "error", "-f", "lavfi", "-i", "color=size=1920x1080:rate=30", "-frames:v", "1", "-c:v", codec, "-f", "null", "-"], tested)
             next_hardware()
         self._run(self.config.get_ffmpeg_path(), ["-hide_banner", "-encoders"], checked)
 
