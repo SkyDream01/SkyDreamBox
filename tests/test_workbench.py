@@ -444,6 +444,22 @@ class WorkbenchTests(unittest.TestCase):
         APP.processEvents()
         self.assertLessEqual(self.window.width(), 900)
 
+    def test_compact_styled_workspace_keeps_file_controls_accessible(self):
+        from styles import STYLESHEET
+        from PySide6.QtWidgets import QScrollArea
+        self.window.setStyleSheet(STYLESHEET)
+        self.window.resize(900, 620)
+        APP.processEvents()
+        scroll = self.window.horizontal.widget(0)
+        self.assertIsInstance(scroll, QScrollArea)
+        self.assertGreater(scroll.verticalScrollBar().maximum(), 0)
+        self.assertGreaterEqual(self.window.file_table.height(), 120)
+        self.assertLessEqual(self.window.file_table.geometry().bottom(), self.window.media_label.geometry().top())
+        scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
+        APP.processEvents()
+        self.assertFalse(self.window.windowIcon().isNull())
+        self.assertTrue(self.window.enqueue_button.isVisible())
+
     def test_missing_engine_reports_error_without_closing_settings(self):
         self.config.data["ffmpeg_path"] = "__missing_sdb_engine__"
         self.window.engine.refresh()
