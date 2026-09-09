@@ -2,12 +2,9 @@
 # SkyDreamBox/ui_tabs.py
 
 import os
-import shlex
-from typing import Optional
 
 from PySide6.QtWidgets import QWidget, QFileDialog, QMessageBox
-from PySide6.QtGui import QPixmap
-from PySide6.QtCore import Qt, QProcess
+from PySide6.QtCore import QProcess
 
 from ui.video_tab_ui import Ui_VideoTab
 from ui.audio_tab_ui import Ui_AudioTab
@@ -19,81 +16,89 @@ from ui.about_tab_ui import Ui_AboutTab
 from ui.settings_tab_ui import Ui_SettingsTab
 
 from constants import (
-    VIDEO_FORMATS, VIDEO_FORMAT_CODECS, AUDIO_CODECS_FOR_VIDEO_FORMAT,
-    AUDIO_BITRATES, AUDIO_FORMATS, AUDIO_FORMAT_CODECS, AUDIO_SAMPLE_RATES,
-    WAV_BIT_DEPTH_CODECS, AUDIO_SAMPLE_FORMATS,
-    SUBTITLE_FORMATS, DEFAULT_COMPRESSION_LEVEL, RESOLUTION_PRESETS,
-    FILE_FILTER_ALL, FILE_FILTER_IMAGE
+    VIDEO_FORMATS,
+    VIDEO_FORMAT_CODECS,
+    AUDIO_CODECS_FOR_VIDEO_FORMAT,
+    AUDIO_BITRATES,
+    AUDIO_FORMATS,
+    AUDIO_FORMAT_CODECS,
+    AUDIO_SAMPLE_RATES,
+    WAV_BIT_DEPTH_CODECS,
+    AUDIO_SAMPLE_FORMATS,
+    SUBTITLE_FORMATS,
+    DEFAULT_COMPRESSION_LEVEL,
+    RESOLUTION_PRESETS,
 )
 from validators import (
-    ValidationResult,
-    validate_time_format, validate_crf, validate_cq, validate_fps,
-    validate_resolution, validate_bitrate, validate_file_path, validate_output_path,
-    is_valid_time, is_valid_crf, is_valid_cq, is_valid_fps,
-    is_valid_resolution, is_valid_bitrate
+    validate_file_path,
+    validate_output_path,
+    is_valid_time,
+    is_valid_crf,
+    is_valid_cq,
+    is_valid_fps,
+    is_valid_resolution,
+    is_valid_bitrate,
 )
 from logger import get_logger
+from utils import time_str_to_seconds
 
 logger = get_logger()
+LOSSY_AUDIO_CODECS = frozenset({"libmp3lame", "aac", "libopus", "libvorbis", "vorbis"})
 
 
 # --- Helper Functions ---
 
+
 def safe_ffmpeg_path(file_path):
     """
-    返回 FFmpeg 安全的路径，防止命令注入攻击。
-    
+    返回可安全传给 QProcess 的绝对路径。
+
     安全措施：
     1. 转换为绝对路径
     2. 验证路径不包含空字符
     3. 验证路径不以 - 开头（防止被解析为命令行参数）
-    4. 验证路径是常规文件路径
-    
+    4. 阻止以 - 开头的文件名，避免被 FFmpeg 当成参数
+
     Args:
         file_path: 输入的文件路径
-        
+
     Returns:
         str: 安全的绝对路径
-        
+
     Raises:
         ValueError: 如果路径包含潜在的安全风险
     """
     if not file_path:
         return file_path
-    
+
     # 检查空字符注入
-    if '\x00' in file_path:
+    if "\x00" in file_path:
         raise ValueError("路径包含非法空字符")
-    
+
     # 转换为绝对路径
     path = os.path.abspath(file_path)
-    
+
     # 检查路径是否以 - 开头（防止命令行参数注入）
     # 即使是绝对路径，也需要检查 basename
     base_name = os.path.basename(path)
-    if base_name.startswith('-'):
+    if base_name.startswith("-"):
         raise ValueError(f"文件名不能以 '-' 开头: {base_name}")
-    
-    # 检查常见的命令注入模式
-    dangerous_patterns = [';', '&', '|', '`', '$', '(', ')', '<', '>']
-    for pattern in dangerous_patterns:
-        if pattern in base_name:
-            raise ValueError(f"路径包含非法字符 '{pattern}': {base_name}")
-    
+
     return path
+
 
 def escape_ffmpeg_filter_path(file_path):
     if not file_path:
         return file_path
-    
+
     # Replace backslashes with forward slashes for better compatibility in filters
-    escaped = file_path.replace('\\', '/')
-    
-    # Escape special characters: : ' [ ] , ;
-    for char in ":'[],;":
-        escaped = escaped.replace(char, f'\\{char}')
-        
-    return escaped
+    escaped = file_path.replace("\\", "/")
+
+    # Escape special characters used by FFmpeg's filter expression parser.
+    for char in ":'[]=,;":
+        escaped = escaped.replace(char, f"\\{char}")
+
+    return f"filename='{escaped}'"
 
 
 def display_error(console, message: str) -> None:
@@ -101,7 +106,44 @@ def display_error(console, message: str) -> None:
     console.append(f"<font color='#e74c3c'><b>输入错误:</b> {message}</font>")
     logger.warning(f"输入验证错误: {message}")
 
+
+def output_file_args(output_file: str) -> list[str]:
+    """根据设置显式指定覆盖策略，避免 -nostdin 下卡在覆盖确认。"""
+    try:
+        from config import get_config
+
+        overwrite = get_config().get("overwrite_files", True)
+    except (ImportError, AttributeError):
+        overwrite = True
+
+    return ["-y" if overwrite else "-n", output_file]
+
+
+def is_same_path(first_path: str, second_path: str) -> bool:
+    """比较两个尚未必然存在的路径。"""
+    return os.path.normcase(os.path.abspath(first_path)) == os.path.normcase(
+        os.path.abspath(second_path)
+    )
+
+
+def validate_input_file(console, file_path: str, message: str) -> bool:
+    result = validate_file_path(file_path)
+    if not result:
+        display_error(console, message)
+        return False
+    return True
+
+
+def validate_output_file(console, file_path: str, message: str) -> bool:
+    result = validate_output_path(file_path)
+    if not result:
+        display_error(console, message if not file_path else result.message)
+        return False
+    return True
+
+
 # --- Base Tab Class ---
+
 
 class BaseTab(QWidget):
     def __init__(self, main_window):
@@ -117,14 +159,21 @@ class BaseTab(QWidget):
             return
         try:
             command = self._get_command()
-            if command:
-                is_started, message = self.process_handler.run_ffmpeg(command)
-                if not is_started:
-                    self.console.append(f"<font color='#e67e22'>{message}</font>")
-                else:
-                    self.console.clear()
-                    self.console.append(f"<b>{message}</b>\n<hr>")
-                    self.main_window.set_buttons_enabled(False)
+            if not command:
+                display_error(self.console, "无法生成 FFmpeg 命令。")
+                return
+
+            if hasattr(self.main_window, "enqueue_legacy"):
+                self.main_window.enqueue_legacy(command)
+                return
+
+            is_started, message = self.process_handler.run_ffmpeg(command)
+            if not is_started:
+                self.console.append(f"<font color='#e67e22'>{message}</font>")
+            else:
+                self.console.clear()
+                self.console.append(f"<b>{message}</b>\n<hr>")
+                self.main_window.set_buttons_enabled(False)
         except Exception as e:
             display_error(self.console, f"构建命令时发生意外错误: {e}")
 
@@ -135,15 +184,16 @@ class BaseTab(QWidget):
         raise NotImplementedError
 
     def set_buttons_enabled(self, enabled):
-        if hasattr(self, 'run_button'):
+        if hasattr(self, "run_button"):
             self.run_button.setEnabled(enabled)
 
     def auto_set_output_path(self, input_path):
         """Automatically set output path based on input path and selected format."""
-        if not input_path: return
-        if not hasattr(self, 'format_combo') or not hasattr(self, 'output_edit'):
+        if not input_path:
             return
-            
+        if not hasattr(self, "format_combo") or not hasattr(self, "output_edit"):
+            return
+
         base_path, _ = os.path.splitext(input_path)
         selected_format = self.format_combo.currentText()
         self.output_edit.setText(f"{base_path}_output.{selected_format}")
@@ -151,30 +201,51 @@ class BaseTab(QWidget):
 
 # --- Tab Implementations ---
 
+
 class VideoTab(BaseTab, Ui_VideoTab):
     def __init__(self, main_window):
         super().__init__(main_window)
         self.setupUi(self)
+        self._output_path_is_auto = False
         self._connect_signals()
         self._initialize_ui_state()
 
     def _connect_signals(self):
-        self.select_input_button.clicked.connect(lambda: self.main_window.select_file(self.input_edit))
+        self.select_input_button.clicked.connect(
+            lambda: self.main_window.select_file(self.input_edit)
+        )
         self.select_output_button.clicked.connect(self.select_output_path)
         self.select_subtitle_button.clicked.connect(self.select_subtitle_file)
         self.run_button.clicked.connect(self._run_command)
         self.format_combo.currentTextChanged.connect(self._on_video_format_changed)
-        self.audio_codec_combo.currentIndexChanged.connect(self._update_audio_bitrate_visibility)
-        self.video_codec_combo.currentTextChanged.connect(self._update_video_options_visibility)
+        self.audio_codec_combo.currentIndexChanged.connect(
+            self._update_audio_bitrate_visibility
+        )
+        self.video_codec_combo.currentTextChanged.connect(
+            self._update_video_options_visibility
+        )
         # --- 新增: 连接分辨率预设下拉菜单的信号 ---
-        self.resolution_preset_combo.currentTextChanged.connect(self._on_resolution_preset_changed)
+        self.resolution_preset_combo.currentTextChanged.connect(
+            self._on_resolution_preset_changed
+        )
+        self.output_edit.textEdited.connect(self._mark_output_path_manual)
+
+    def _mark_output_path_manual(self, _text):
+        self._output_path_is_auto = False
+
+    def auto_set_output_path(self, input_path):
+        super().auto_set_output_path(input_path)
+        if input_path:
+            self._output_path_is_auto = True
 
     def _initialize_ui_state(self):
         self.format_combo.addItems(VIDEO_FORMATS)
         self.audio_bitrate_combo.addItems(AUDIO_BITRATES)
         self.audio_bitrate_combo.setCurrentText("192k")
         # --- 新增: 初始化分辨率预设下拉菜单 ---
-        self.resolution_preset_combo.addItems(["自定义"] + list(RESOLUTION_PRESETS.keys()))
+        self.resolution_preset_combo.addItems(
+            ["自定义"] + list(RESOLUTION_PRESETS.keys())
+        )
         self._on_video_format_changed(self.format_combo.currentText())
 
     # --- 新增: 分辨率预设选择事件处理函数 ---
@@ -183,7 +254,7 @@ class VideoTab(BaseTab, Ui_VideoTab):
             width = RESOLUTION_PRESETS[preset]
             self.resolution_edit.setText(f"{width}:-1")
             self.resolution_edit.setEnabled(False)
-        else: # "自定义"
+        else:  # "自定义"
             self.resolution_edit.clear()
             self.resolution_edit.setEnabled(True)
 
@@ -192,12 +263,13 @@ class VideoTab(BaseTab, Ui_VideoTab):
         self.video_codec_combo.addItems(VIDEO_FORMAT_CODECS.get(v_format, []))
         self.audio_codec_combo.clear()
         self.audio_codec_combo.addItems(AUDIO_CODECS_FOR_VIDEO_FORMAT.get(v_format, []))
-        self.auto_set_output_path(self.input_edit.text())
+        if not self.output_edit.text() or self._output_path_is_auto:
+            self.auto_set_output_path(self.input_edit.text())
         self._update_audio_bitrate_visibility()
 
     def _update_audio_bitrate_visibility(self):
         codec = self.audio_codec_combo.currentText()
-        is_visible = codec not in ['flac', 'copy', 'alac']
+        is_visible = codec not in ["flac", "copy", "alac"]
         self.audio_bitrate_label.setVisible(is_visible)
         self.audio_bitrate_combo.setVisible(is_visible)
 
@@ -212,58 +284,109 @@ class VideoTab(BaseTab, Ui_VideoTab):
         self.cq_label.setVisible(is_cq_visible)
         self.cq_edit.setVisible(is_cq_visible)
 
-        is_bitrate_visible = codec != 'copy'
+        is_bitrate_visible = codec != "copy"
         self.video_bitrate_label.setVisible(is_bitrate_visible)
         self.video_bitrate_edit.setVisible(is_bitrate_visible)
 
     def _validate_inputs(self):
-        if not self.input_edit.text() or not os.path.exists(self.input_edit.text()):
-            display_error(self.console, "输入视频文件不存在或未指定。"); return False
-        if not self.output_edit.text():
-            display_error(self.console, "输出文件路径不能为空。"); return False
+        input_file = self.input_edit.text()
+        output_file = self.output_edit.text()
+        if not validate_input_file(
+            self.console, input_file, "输入视频文件不存在或未指定。"
+        ):
+            return False
+        if not validate_output_file(
+            self.console, output_file, "输出文件路径不能为空。"
+        ):
+            return False
+        if is_same_path(input_file, output_file):
+            display_error(self.console, "输出文件不能与输入视频相同。")
+            return False
+        if (
+            os.path.splitext(output_file)[1].lower()
+            != f".{self.format_combo.currentText()}"
+        ):
+            display_error(
+                self.console, f"输出文件扩展名应为 .{self.format_combo.currentText()}。"
+            )
+            return False
         if self.crf_edit.isVisible() and not is_valid_crf(self.crf_edit.text()):
-            display_error(self.console, f"无效的CRF值: {self.crf_edit.text()} (应为0-51的整数)"); return False
+            display_error(
+                self.console, f"无效的CRF值: {self.crf_edit.text()} (应为0-51的整数)"
+            )
+            return False
         if self.cq_edit.isVisible() and not is_valid_cq(self.cq_edit.text()):
-            display_error(self.console, f"无效的CQ值: {self.cq_edit.text()} (应为0-51的整数)"); return False
+            display_error(
+                self.console, f"无效的CQ值: {self.cq_edit.text()} (应为0-51的整数)"
+            )
+            return False
         if not is_valid_fps(self.fps_edit.text()):
-            display_error(self.console, f"无效的FPS值: {self.fps_edit.text()}"); return False
+            display_error(self.console, f"无效的FPS值: {self.fps_edit.text()}")
+            return False
         if not is_valid_resolution(self.resolution_edit.text()):
-            display_error(self.console, f"无效的分辨率格式: {self.resolution_edit.text()} (应为 宽度:高度)"); return False
-        if self.video_bitrate_edit.isVisible() and not is_valid_bitrate(self.video_bitrate_edit.text()):
-            display_error(self.console, f"无效的视频比特率: {self.video_bitrate_edit.text()}"); return False
-        if self.subtitle_edit.text() and not os.path.exists(self.subtitle_edit.text()):
-            display_error(self.console, "指定的字幕文件不存在。"); return False
+            display_error(
+                self.console,
+                f"无效的分辨率格式: {self.resolution_edit.text()} (应为 宽度:高度)",
+            )
+            return False
+        if self.video_bitrate_edit.isVisible() and not is_valid_bitrate(
+            self.video_bitrate_edit.text()
+        ):
+            display_error(
+                self.console, f"无效的视频比特率: {self.video_bitrate_edit.text()}"
+            )
+            return False
+        if self.subtitle_edit.text() and not validate_input_file(
+            self.console, self.subtitle_edit.text(), "指定的字幕文件不存在。"
+        ):
+            return False
+        if self.video_codec_combo.currentText() == "copy" and (
+            self.subtitle_edit.text()
+            or self.resolution_edit.text()
+            or self.fps_edit.text()
+        ):
+            display_error(
+                self.console, "视频流拷贝不能与字幕烧录、分辨率或帧率调整同时使用。"
+            )
+            return False
         return True
 
     def select_output_path(self):
-
         filter_str = f"{self.format_combo.currentText().upper()} (*.{self.format_combo.currentText()});;All Files (*)"
-        default_path = self.output_edit.text() or os.path.dirname(self.input_edit.text())
-        file_name, _ = QFileDialog.getSaveFileName(self, "选择输出路径", default_path, filter_str)
-        if file_name: self.output_edit.setText(file_name)
+        default_path = self.output_edit.text() or os.path.dirname(
+            self.input_edit.text()
+        )
+        file_name, _ = QFileDialog.getSaveFileName(
+            self, "选择输出路径", default_path, filter_str
+        )
+        if file_name:
+            self.output_edit.setText(file_name)
+            self._output_path_is_auto = False
 
     def select_subtitle_file(self):
-        file_name, _ = QFileDialog.getOpenFileName(self, "选择字幕文件", "", SUBTITLE_FORMATS)
-        if file_name: self.subtitle_edit.setText(file_name)
+        file_name, _ = QFileDialog.getOpenFileName(
+            self, "选择字幕文件", "", SUBTITLE_FORMATS
+        )
+        if file_name:
+            self.subtitle_edit.setText(file_name)
 
     def _get_command(self):
         input_file = safe_ffmpeg_path(self.input_edit.text())
         output_file = safe_ffmpeg_path(self.output_edit.text())
         command = ["ffmpeg", "-i", input_file]
-        
+
         subtitle_file = safe_ffmpeg_path(self.subtitle_edit.text())
 
-        
         # 将视频滤镜相关的命令存入一个列表
         video_filters = []
-        
+
         if subtitle_file:
             escaped_subtitle_path = escape_ffmpeg_filter_path(subtitle_file)
             video_filters.append(f"subtitles={escaped_subtitle_path}")
 
         video_codec = self.video_codec_combo.currentText()
         command.extend(["-c:v", video_codec])
-        
+
         if self.resolution_edit.text():
             resolution = self.resolution_edit.text()
             video_filters.append(f"scale={resolution}")
@@ -272,7 +395,7 @@ class VideoTab(BaseTab, Ui_VideoTab):
         if video_filters:
             command.extend(["-vf", ",".join(video_filters)])
 
-        if video_codec != 'copy':
+        if video_codec != "copy":
             if "qsv" in video_codec:
                 if self.crf_edit.isVisible() and self.crf_edit.text():
                     command.extend(["-global_quality", self.crf_edit.text()])
@@ -290,27 +413,44 @@ class VideoTab(BaseTab, Ui_VideoTab):
 
         audio_codec = self.audio_codec_combo.currentText()
         command.extend(["-c:a", audio_codec])
-        if audio_codec != 'copy' and self.audio_bitrate_combo.isVisible() and self.audio_bitrate_combo.currentText():
+        if (
+            audio_codec != "copy"
+            and self.audio_bitrate_combo.isVisible()
+            and self.audio_bitrate_combo.currentText()
+        ):
             command.extend(["-b:a", self.audio_bitrate_combo.currentText()])
-        
-        command.extend(["-y", output_file])
+
+        command.extend(output_file_args(output_file))
         return command
+
 
 # ... (后面其他选项卡的代码保持不变)
 class AudioTab(BaseTab, Ui_AudioTab):
     def __init__(self, main_window):
         super().__init__(main_window)
         self.setupUi(self)
+        self._output_path_is_auto = False
         self._connect_signals()
         self._initialize_ui_state()
 
     def _connect_signals(self):
-        self.select_input_button.clicked.connect(lambda: self.main_window.select_file(self.input_edit))
+        self.select_input_button.clicked.connect(
+            lambda: self.main_window.select_file(self.input_edit)
+        )
         self.select_output_button.clicked.connect(self.select_output_path)
         self.run_button.clicked.connect(self._run_command)
         self.format_combo.currentTextChanged.connect(self._on_audio_format_changed)
         self.codec_combo.currentTextChanged.connect(self._update_dynamic_options)
         self.bitrate_combo.currentTextChanged.connect(self._update_dynamic_options)
+        self.output_edit.textEdited.connect(self._mark_output_path_manual)
+
+    def _mark_output_path_manual(self, _text):
+        self._output_path_is_auto = False
+
+    def auto_set_output_path(self, input_path):
+        super().auto_set_output_path(input_path)
+        if input_path:
+            self._output_path_is_auto = True
 
     def _initialize_ui_state(self):
         self.format_combo.addItems(AUDIO_FORMATS)
@@ -327,23 +467,25 @@ class AudioTab(BaseTab, Ui_AudioTab):
         self.codec_combo.addItems(codecs)
 
         self.bit_depth_combo.clear()
-        if a_format == 'wav':
+        if a_format == "wav":
             self.bit_depth_combo.addItems(WAV_BIT_DEPTH_CODECS.keys())
         else:
             self.bit_depth_combo.addItems(AUDIO_SAMPLE_FORMATS.keys())
-        
-        self.auto_set_output_path(self.input_edit.text())
+
+        if not self.output_edit.text() or self._output_path_is_auto:
+            self.auto_set_output_path(self.input_edit.text())
         self._update_dynamic_options()
 
     def _update_dynamic_options(self):
         a_format = self.format_combo.currentText()
         codec = self.codec_combo.currentText()
-        if not codec: return
-        
-        is_copy = codec == 'copy'
-        is_lossy = codec in ['libmp3lame', 'aac', 'opus', 'vorbis']
-        is_flac = codec == 'flac'
-        is_wav = a_format == 'wav'
+        if not codec:
+            return
+
+        is_copy = codec == "copy"
+        is_lossy = codec in LOSSY_AUDIO_CODECS
+        is_flac = codec == "flac"
+        is_wav = a_format == "wav"
 
         self.sample_rate_combo.setEnabled(not is_copy)
         self.bitrate_combo.setEnabled(not is_copy)
@@ -354,7 +496,7 @@ class AudioTab(BaseTab, Ui_AudioTab):
 
         self.compression_label.setVisible(is_flac)
         self.compression_combo.setVisible(is_flac)
-        
+
         # MODIFIED: For lossy codecs, bit depth is not applicable. Also hide for 'copy'
         is_bit_depth_visible = not is_copy and not is_lossy
         self.bit_depth_label.setVisible(is_bit_depth_visible)
@@ -365,17 +507,39 @@ class AudioTab(BaseTab, Ui_AudioTab):
             self.bit_depth_label.setText("位深:" if is_wav else "采样格式:")
 
     def select_output_path(self):
-
         filter_str = f"{self.format_combo.currentText().upper()} (*.{self.format_combo.currentText()});;All Files (*)"
-        default_path = self.output_edit.text() or os.path.dirname(self.input_edit.text())
-        file_name, _ = QFileDialog.getSaveFileName(self, "选择输出路径", default_path, filter_str)
-        if file_name: self.output_edit.setText(file_name)
-        
+        default_path = self.output_edit.text() or os.path.dirname(
+            self.input_edit.text()
+        )
+        file_name, _ = QFileDialog.getSaveFileName(
+            self, "选择输出路径", default_path, filter_str
+        )
+        if file_name:
+            self.output_edit.setText(file_name)
+            self._output_path_is_auto = False
+
     def _validate_inputs(self):
-        if not self.input_edit.text() or not os.path.exists(self.input_edit.text()):
-            display_error(self.console, "输入音频文件不存在或未指定。"); return False
-        if not self.output_edit.text():
-            display_error(self.console, "输出文件路径不能为空。"); return False
+        input_file = self.input_edit.text()
+        output_file = self.output_edit.text()
+        if not validate_input_file(
+            self.console, input_file, "输入音频文件不存在或未指定。"
+        ):
+            return False
+        if not validate_output_file(
+            self.console, output_file, "输出文件路径不能为空。"
+        ):
+            return False
+        if is_same_path(input_file, output_file):
+            display_error(self.console, "输出文件不能与输入音频相同。")
+            return False
+        if (
+            os.path.splitext(output_file)[1].lower()
+            != f".{self.format_combo.currentText()}"
+        ):
+            display_error(
+                self.console, f"输出文件扩展名应为 .{self.format_combo.currentText()}。"
+            )
+            return False
         return True
 
     def _get_command(self):
@@ -383,28 +547,30 @@ class AudioTab(BaseTab, Ui_AudioTab):
         output_file = safe_ffmpeg_path(self.output_edit.text())
         command = ["ffmpeg", "-i", input_file]
 
-        
         a_format = self.format_combo.currentText()
         codec = self.codec_combo.currentText()
-        if not codec: raise ValueError("未选择任何有效的编码器")
-        
-        if a_format == 'wav':
+        if not codec:
+            raise ValueError("未选择任何有效的编码器")
+
+        if a_format == "wav":
             bit_depth_text = self.bit_depth_combo.currentText()
             wav_codec = WAV_BIT_DEPTH_CODECS.get(bit_depth_text, "pcm_s16le")
             command.extend(["-c:a", wav_codec])
         else:
             command.extend(["-c:a", codec])
 
-            if codec != 'copy':
-                is_lossy = codec in ['libmp3lame', 'aac', 'opus', 'vorbis']
+            if codec != "copy":
+                is_lossy = codec in LOSSY_AUDIO_CODECS
 
                 if self.bitrate_label.isVisible() and is_lossy:
                     bitrate = self.bitrate_combo.currentText()
                     if bitrate:
                         command.extend(["-b:a", bitrate])
-                
-                if self.compression_label.isVisible() and codec == 'flac':
-                    command.extend(["-compression_level", self.compression_combo.currentText()])
+
+                if self.compression_label.isVisible() and codec == "flac":
+                    command.extend(
+                        ["-compression_level", self.compression_combo.currentText()]
+                    )
 
                 # MODIFIED: Only add sample format for non-lossy codecs
                 if not is_lossy:
@@ -413,14 +579,15 @@ class AudioTab(BaseTab, Ui_AudioTab):
                     if sample_fmt:
                         command.extend(["-sample_fmt", sample_fmt])
 
-        if codec != 'copy':
+        if codec != "copy":
             sample_rate = self.sample_rate_combo.currentText()
             if sample_rate and sample_rate != "(默认)":
                 command.extend(["-ar", sample_rate])
 
-        command.extend(["-y", output_file])
+        command.extend(output_file_args(output_file))
         return command
-    
+
+
 class MuxingTab(BaseTab, Ui_MuxingTab):
     def __init__(self, main_window):
         super().__init__(main_window)
@@ -428,30 +595,67 @@ class MuxingTab(BaseTab, Ui_MuxingTab):
         self._connect_signals()
 
     def _connect_signals(self):
-        self.select_video_button.clicked.connect(lambda: self.main_window.select_file(self.video_input_edit))
-        self.select_audio_button.clicked.connect(lambda: self.main_window.select_file(self.audio_input_edit))
+        self.select_video_button.clicked.connect(
+            lambda: self.main_window.select_file(self.video_input_edit)
+        )
+        self.select_audio_button.clicked.connect(
+            lambda: self.main_window.select_file(self.audio_input_edit)
+        )
         self.select_subtitle_button.clicked.connect(self.select_subtitle_file)
         self.select_output_button.clicked.connect(self.select_output_path)
         self.run_button.clicked.connect(self._run_command)
-    
+
     def select_subtitle_file(self):
-        file_name, _ = QFileDialog.getOpenFileName(self, "选择字幕文件", "", SUBTITLE_FORMATS)
-        if file_name: self.subtitle_input_edit.setText(file_name)
+        file_name, _ = QFileDialog.getOpenFileName(
+            self, "选择字幕文件", "", SUBTITLE_FORMATS
+        )
+        if file_name:
+            self.subtitle_input_edit.setText(file_name)
 
     def select_output_path(self):
         default_dir = os.path.dirname(self.video_input_edit.text())
-        file_name, _ = QFileDialog.getSaveFileName(self, "选择输出文件", default_dir, "Media Files (*.mp4 *.mkv)")
-        if file_name: self.output_edit.setText(file_name)
-        
+        file_name, _ = QFileDialog.getSaveFileName(
+            self, "选择输出文件", default_dir, "Media Files (*.mp4 *.mkv)"
+        )
+        if file_name:
+            self.output_edit.setText(file_name)
+
+    def auto_set_output_path(self, input_path):
+        if not input_path or self.output_edit.text():
+            return
+        base_path, _ = os.path.splitext(input_path)
+        # MKV 对流拷贝时的编码兼容性更宽，适合作为自动默认值。
+        self.output_edit.setText(f"{base_path}_muxed.mkv")
+
     def _validate_inputs(self):
-        if not self.video_input_edit.text() or not os.path.exists(self.video_input_edit.text()):
-            display_error(self.console, "输入的视频文件不存在或未指定。"); return False
-        if not self.audio_input_edit.text() or not os.path.exists(self.audio_input_edit.text()):
-            display_error(self.console, "输入的音频文件不存在或未指定。"); return False
-        if self.subtitle_input_edit.text() and not os.path.exists(self.subtitle_input_edit.text()):
-            display_error(self.console, "指定的字幕文件不存在。"); return False
-        if not self.output_edit.text():
-            display_error(self.console, "输出文件路径不能为空。"); return False
+        video_file = self.video_input_edit.text()
+        audio_file = self.audio_input_edit.text()
+        subtitle_file = self.subtitle_input_edit.text()
+        output_file = self.output_edit.text()
+        if not validate_input_file(
+            self.console, video_file, "输入的视频文件不存在或未指定。"
+        ):
+            return False
+        if not validate_input_file(
+            self.console, audio_file, "输入的音频文件不存在或未指定。"
+        ):
+            return False
+        if subtitle_file and not validate_input_file(
+            self.console, subtitle_file, "指定的字幕文件不存在。"
+        ):
+            return False
+        if not validate_output_file(
+            self.console, output_file, "输出文件路径不能为空。"
+        ):
+            return False
+        if os.path.splitext(output_file)[1].lower() not in {".mp4", ".mkv"}:
+            display_error(self.console, "合并输出文件仅支持 .mp4 或 .mkv。")
+            return False
+        if is_same_path(video_file, output_file) or is_same_path(
+            audio_file, output_file
+        ):
+            display_error(self.console, "输出文件不能与任一输入文件相同。")
+            return False
         return True
 
     def _get_command(self):
@@ -459,25 +663,26 @@ class MuxingTab(BaseTab, Ui_MuxingTab):
         audio_file = safe_ffmpeg_path(self.audio_input_edit.text())
         subtitle_file = safe_ffmpeg_path(self.subtitle_input_edit.text())
         output_file = safe_ffmpeg_path(self.output_edit.text())
-        
+
         command = ["ffmpeg", "-i", video_file, "-i", audio_file]
 
         if subtitle_file:
             command.extend(["-i", subtitle_file])
-        
+
         command.extend(["-map", "0:v:0", "-map", "1:a:0"])
         if subtitle_file:
             command.extend(["-map", "2:s:0"])
-        
+
         command.extend(["-c:v", "copy", "-c:a", "copy"])
         if subtitle_file:
-            if output_file.endswith('.mp4'):
+            if output_file.lower().endswith(".mp4"):
                 command.extend(["-c:s", "mov_text"])
             else:
                 command.extend(["-c:s", "copy"])
-                
-        command.extend(["-y", output_file])
+
+        command.extend(output_file_args(output_file))
         return command
+
 
 class DemuxingTab(BaseTab, Ui_DemuxingTab):
     def __init__(self, main_window):
@@ -487,9 +692,15 @@ class DemuxingTab(BaseTab, Ui_DemuxingTab):
         self.current_stream_type = None
 
     def _connect_signals(self):
-        self.select_input_button.clicked.connect(lambda: self.main_window.select_file(self.input_edit))
-        self.extract_video_button.clicked.connect(lambda: self._run_demux_command('video'))
-        self.extract_audio_button.clicked.connect(lambda: self._run_demux_command('audio'))
+        self.select_input_button.clicked.connect(
+            lambda: self.main_window.select_file(self.input_edit)
+        )
+        self.extract_video_button.clicked.connect(
+            lambda: self._run_demux_command("video")
+        )
+        self.extract_audio_button.clicked.connect(
+            lambda: self._run_demux_command("audio")
+        )
 
     def _run_demux_command(self, stream_type):
         self.current_stream_type = stream_type
@@ -498,37 +709,42 @@ class DemuxingTab(BaseTab, Ui_DemuxingTab):
     def set_buttons_enabled(self, enabled):
         self.extract_video_button.setEnabled(enabled)
         self.extract_audio_button.setEnabled(enabled)
-    
+
     def _validate_inputs(self):
-        if not self.input_edit.text() or not os.path.exists(self.input_edit.text()):
-            display_error(self.console, "输入文件不存在或未指定。"); return False
-        return True
+        return validate_input_file(
+            self.console, self.input_edit.text(), "输入文件不存在或未指定。"
+        )
 
     def _get_command(self):
         input_file = safe_ffmpeg_path(self.input_edit.text())
         base, ext = os.path.splitext(input_file)
 
-        
-        try:
-            from config import get_config
-            config = get_config()
-            overwrite = config.get("overwrite_files", True)
-        except ImportError:
-            overwrite = True
-        
-        if self.current_stream_type == 'video':
+        if self.current_stream_type == "video":
             output_file = f"{base}_video_only{ext}"
-            if overwrite:
-                return ["ffmpeg", "-i", input_file, "-c:v", "copy", "-an", "-y", output_file]
-            else:
-                return ["ffmpeg", "-i", input_file, "-c:v", "copy", "-an", output_file]
-        elif self.current_stream_type == 'audio':
+            return [
+                "ffmpeg",
+                "-i",
+                input_file,
+                "-map",
+                "0:v:0",
+                "-c",
+                "copy",
+                *output_file_args(output_file),
+            ]
+        elif self.current_stream_type == "audio":
             output_file = f"{base}_audio_only.mka"
-            if overwrite:
-                return ["ffmpeg", "-i", input_file, "-c:a", "copy", "-vn", "-y", output_file]
-            else:
-                return ["ffmpeg", "-i", input_file, "-c:a", "copy", "-vn", output_file]
+            return [
+                "ffmpeg",
+                "-i",
+                input_file,
+                "-map",
+                "0:a:0",
+                "-c",
+                "copy",
+                *output_file_args(output_file),
+            ]
         return None
+
 
 class CommonOperationsTab(BaseTab, Ui_CommonOpsTab):
     def __init__(self, main_window):
@@ -538,14 +754,22 @@ class CommonOperationsTab(BaseTab, Ui_CommonOpsTab):
         self.current_command_type = None
 
     def _connect_signals(self):
-        self.select_trim_input_button.clicked.connect(lambda: self.main_window.select_file(self.trim_input_edit))
+        self.select_trim_input_button.clicked.connect(
+            lambda: self.main_window.select_file(self.trim_input_edit)
+        )
         self.select_trim_output_button.clicked.connect(self.select_trim_output_path)
-        self.trim_button.clicked.connect(lambda: self._run_specific_command('trim'))
-        
+        self.trim_button.clicked.connect(lambda: self._run_specific_command("trim"))
+
         self.select_img_button.clicked.connect(self.select_image_file)
-        self.select_audio_button.clicked.connect(lambda: self.main_window.select_file(self.audio_input_edit))
-        self.select_img_audio_output_button.clicked.connect(self.select_img_audio_output_path)
-        self.img_audio_button.clicked.connect(lambda: self._run_specific_command('img_audio'))
+        self.select_audio_button.clicked.connect(
+            lambda: self.main_window.select_file(self.audio_input_edit)
+        )
+        self.select_img_audio_output_button.clicked.connect(
+            self.select_img_audio_output_path
+        )
+        self.img_audio_button.clicked.connect(
+            lambda: self._run_specific_command("img_audio")
+        )
 
     def _run_specific_command(self, command_type):
         self.current_command_type = command_type
@@ -558,104 +782,126 @@ class CommonOperationsTab(BaseTab, Ui_CommonOpsTab):
     def select_trim_output_path(self):
         default_dir = os.path.dirname(self.trim_input_edit.text())
         file_name, _ = QFileDialog.getSaveFileName(self, "选择输出文件", default_dir)
-        if file_name: self.trim_output_edit.setText(file_name)
+        if file_name:
+            self.trim_output_edit.setText(file_name)
 
     def select_image_file(self):
-        file_name, _ = QFileDialog.getOpenFileName(self, "选择图片文件", "", "Image Files (*.png *.jpg *.jpeg *.bmp)")
-        if file_name: self.img_input_edit.setText(file_name)
+        file_name, _ = QFileDialog.getOpenFileName(
+            self, "选择图片文件", "", "Image Files (*.png *.jpg *.jpeg *.bmp)"
+        )
+        if file_name:
+            self.img_input_edit.setText(file_name)
 
     def select_img_audio_output_path(self):
         default_dir = os.path.dirname(self.img_input_edit.text())
-        file_name, _ = QFileDialog.getSaveFileName(self, "选择输出视频", default_dir, "Video Files (*.mp4)")
-        if file_name: self.img_audio_output_edit.setText(file_name)
+        file_name, _ = QFileDialog.getSaveFileName(
+            self, "选择输出视频", default_dir, "Video Files (*.mp4)"
+        )
+        if file_name:
+            self.img_audio_output_edit.setText(file_name)
 
     def _validate_inputs(self):
-        if self.current_command_type == 'trim':
-            if not self.trim_input_edit.text() or not os.path.exists(self.trim_input_edit.text()):
-                display_error(self.console, "截取输入的视频文件不存在或未指定。"); return False
-            if not self.trim_output_edit.text():
-                display_error(self.console, "截取输出的文件路径不能为空。"); return False
+        if self.current_command_type == "trim":
+            if not validate_input_file(
+                self.console,
+                self.trim_input_edit.text(),
+                "截取输入的视频文件不存在或未指定。",
+            ):
+                return False
+            if not validate_output_file(
+                self.console,
+                self.trim_output_edit.text(),
+                "截取输出的文件路径不能为空。",
+            ):
+                return False
+            if is_same_path(self.trim_input_edit.text(), self.trim_output_edit.text()):
+                display_error(self.console, "截取输出文件不能与输入文件相同。")
+                return False
             if not is_valid_time(self.start_time_edit.text()):
-                display_error(self.console, f"无效的开始时间格式: {self.start_time_edit.text()}"); return False
+                display_error(
+                    self.console, f"无效的开始时间格式: {self.start_time_edit.text()}"
+                )
+                return False
             if not is_valid_time(self.end_time_edit.text()):
-                display_error(self.console, f"无效的结束时间格式: {self.end_time_edit.text()}"); return False
-        elif self.current_command_type == 'img_audio':
-            if not self.img_input_edit.text() or not os.path.exists(self.img_input_edit.text()):
-                display_error(self.console, "输入的图片文件不存在或未指定。"); return False
-            if not self.audio_input_edit.text() or not os.path.exists(self.audio_input_edit.text()):
-                display_error(self.console, "图声合成的输出路径不能为空。"); return False
-            if not self.img_audio_output_edit.text():
-                display_error(self.console, "图声合成的输出路径不能为空。"); return False
+                display_error(
+                    self.console, f"无效的结束时间格式: {self.end_time_edit.text()}"
+                )
+                return False
+            if self.end_time_edit.text() and (
+                time_str_to_seconds(self.end_time_edit.text())
+                <= time_str_to_seconds(self.start_time_edit.text())
+            ):
+                display_error(self.console, "结束时间必须晚于开始时间。")
+                return False
+        elif self.current_command_type == "img_audio":
+            if not validate_input_file(
+                self.console,
+                self.img_input_edit.text(),
+                "输入的图片文件不存在或未指定。",
+            ):
+                return False
+            if not validate_input_file(
+                self.console,
+                self.audio_input_edit.text(),
+                "输入的音频文件不存在或未指定。",
+            ):
+                return False
+            if not validate_output_file(
+                self.console,
+                self.img_audio_output_edit.text(),
+                "图声合成的输出路径不能为空。",
+            ):
+                return False
+            if os.path.splitext(self.img_audio_output_edit.text())[1].lower() != ".mp4":
+                display_error(self.console, "图声合成输出文件应使用 .mp4 扩展名。")
+                return False
         return True
 
     def _get_command(self):
-        # 获取覆盖设置
-        try:
-            from config import get_config
-            config = get_config()
-            overwrite = config.get("overwrite_files", True)
-        except ImportError:
-            overwrite = True
-        
-        if self.current_command_type == 'trim':
+        if self.current_command_type == "trim":
             input_file = safe_ffmpeg_path(self.trim_input_edit.text())
             output_file = safe_ffmpeg_path(self.trim_output_edit.text())
             start_time = self.start_time_edit.text()
 
             end_time = self.end_time_edit.text()
 
-            command = ["ffmpeg", "-i", input_file, "-c", "copy"]
-            if start_time and start_time != '00:00:00':
+            command = ["ffmpeg"]
+            if start_time and start_time != "00:00:00":
                 command.extend(["-ss", start_time])
             if end_time:
                 command.extend(["-to", end_time])
-            
-            if overwrite:
-                command.extend(["-y", output_file])
-            else:
-                command.append(output_file)
+            command.extend(["-i", input_file, "-map", "0", "-c", "copy"])
+            command.extend(output_file_args(output_file))
             return command
 
-        elif self.current_command_type == 'img_audio':
+        elif self.current_command_type == "img_audio":
             img_file = safe_ffmpeg_path(self.img_input_edit.text())
             audio_file = safe_ffmpeg_path(self.audio_input_edit.text())
             output_file = safe_ffmpeg_path(self.img_audio_output_edit.text())
-            
-            command = [
-                "ffmpeg", "-loop", "1", "-i", img_file,
 
-                "-i", audio_file,
-                "-c:v", "libx264", "-tune", "stillimage",
-                "-c:a", "aac", "-b:a", "192k",
-                "-shortest"
+            command = [
+                "ffmpeg",
+                "-loop",
+                "1",
+                "-i",
+                img_file,
+                "-i",
+                audio_file,
+                "-c:v",
+                "libx264",
+                "-tune",
+                "stillimage",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-pix_fmt",
+                "yuv420p",
+                "-shortest",
             ]
-            if overwrite:
-                command.extend(["-y", output_file])
-            else:
-                command.append(output_file)
+            command.extend(output_file_args(output_file))
             return command
         return None
-
-_DANGEROUS_PROTOCOLS = ('http://', 'https://', 'ftp://', 'smb://', 'ssh://',
-                         'pipe:', 'crypto:', 'ffhttp:', 'tcp:', 'udp:', 'gopher://')
-_DANGEROUS_FILTERS = ('sendcmd', 'zticker', 'exec', 'system', 'aselect',
-                      'metadata', 'dvbsub', 'dvb_teletext')
-
-
-def _check_command_safety(command_text: str) -> tuple[bool, str]:
-    """检查命令是否包含危险操作"""
-    text_lower = command_text.lower().strip()
-
-    for protocol in _DANGEROUS_PROTOCOLS:
-        if protocol in text_lower:
-            return False, f"检测到危险协议 '{protocol}'，已阻止执行"
-
-    if '-filter' in text_lower:
-        for filt in _DANGEROUS_FILTERS:
-            if filt in text_lower:
-                return False, f"检测到危险滤镜/功能 '{filt}'，已阻止执行"
-
-    return True, ""
 
 
 class ProfessionalTab(BaseTab, Ui_ProfessionalTab):
@@ -672,17 +918,23 @@ class ProfessionalTab(BaseTab, Ui_ProfessionalTab):
         if not command_text:
             display_error(self.console, "命令不能为空。")
             return False
-        is_safe, reason = _check_command_safety(command_text)
-        if not is_safe:
-            display_error(self.console, reason)
+
+        command = QProcess.splitCommand(command_text)
+        if not command:
+            display_error(self.console, "无法解析 FFmpeg 命令。")
+            return False
+
+        executable = os.path.basename(command[0]).lower()
+        if executable not in {"ffmpeg", "ffmpeg.exe"}:
+            display_error(self.console, "专业命令必须以 ffmpeg 或 ffmpeg.exe 开头。")
             return False
         return True
 
     def _get_command(self):
         command_text = self.command_input.toPlainText().strip()
-        return shlex.split(command_text)
+        return QProcess.splitCommand(command_text)
 
- 
+
 # --- 设置选项卡 ---
 class SettingsTab(BaseTab, Ui_SettingsTab):
     def __init__(self, main_window):
@@ -690,123 +942,184 @@ class SettingsTab(BaseTab, Ui_SettingsTab):
         self.setupUi(self)
         self._connect_signals()
         self._load_config()
-    
+
     def _connect_signals(self):
-        self.ffmpeg_browse_button.clicked.connect(lambda: self._browse_file(self.ffmpeg_path_edit, "选择FFmpeg可执行文件", "Executable Files (*.exe);;All Files (*)"))
-        self.ffprobe_browse_button.clicked.connect(lambda: self._browse_file(self.ffprobe_path_edit, "选择FFprobe可执行文件", "Executable Files (*.exe);;All Files (*)"))
+        self.ffmpeg_browse_button.clicked.connect(
+            lambda: self._browse_file(
+                self.ffmpeg_path_edit,
+                "选择FFmpeg可执行文件",
+                "Executable Files (*.exe);;All Files (*)",
+            )
+        )
+        self.ffprobe_browse_button.clicked.connect(
+            lambda: self._browse_file(
+                self.ffprobe_path_edit,
+                "选择FFprobe可执行文件",
+                "Executable Files (*.exe);;All Files (*)",
+            )
+        )
         self.test_button.clicked.connect(self._test_ffmpeg)
         self.save_button.clicked.connect(self._save_config)
         self.reset_button.clicked.connect(self._reset_to_defaults)
-    
+
     def _browse_file(self, line_edit, title, filter_str):
         file_name, _ = QFileDialog.getOpenFileName(self, title, "", filter_str)
         if file_name:
             line_edit.setText(file_name)
-    
+
     def _load_config(self):
         try:
             from config import get_config
+
             config = get_config()
-            
+
             # FFmpeg路径
             ffmpeg_path = config.get("ffmpeg_path", "ffmpeg")
-            self.ffmpeg_path_edit.setText(ffmpeg_path if ffmpeg_path != "ffmpeg" else "")
-            
+            self.ffmpeg_path_edit.setText(
+                ffmpeg_path if ffmpeg_path != "ffmpeg" else ""
+            )
+
             # FFprobe路径
             ffprobe_path = config.get("ffprobe_path", "ffprobe")
-            self.ffprobe_path_edit.setText(ffprobe_path if ffprobe_path != "ffprobe" else "")
-            
+            self.ffprobe_path_edit.setText(
+                ffprobe_path if ffprobe_path != "ffprobe" else ""
+            )
+
             # 复选框设置
             self.overwrite_files_check.setChecked(config.get("overwrite_files", True))
-            
+
         except ImportError:
             self.console.append("<font color='#e74c3c'>错误: 配置模块加载失败</font>")
-    
+
     def _save_config(self):
         try:
             from config import get_config
+
             config = get_config()
-            
+
             # FFmpeg路径
             ffmpeg_path = self.ffmpeg_path_edit.text().strip()
             config.set("ffmpeg_path", ffmpeg_path if ffmpeg_path else "ffmpeg")
-            
+
             # FFprobe路径
             ffprobe_path = self.ffprobe_path_edit.text().strip()
             config.set("ffprobe_path", ffprobe_path if ffprobe_path else "ffprobe")
-            
+
             # 复选框设置
             config.set("overwrite_files", self.overwrite_files_check.isChecked())
-            
+
             # 保存到文件
             if config.save():
                 self.console.append("<font color='#2ecc71'>设置已保存成功</font>")
-                self.console.append("<font color='#f1c40f'>部分设置需要重启应用才能生效</font>")
+                self.console.append(
+                    "<font color='#f1c40f'>部分设置需要重启应用才能生效</font>"
+                )
             else:
                 self.console.append("<font color='#e74c3c'>错误: 保存设置失败</font>")
-                
+
         except ImportError:
             self.console.append("<font color='#e74c3c'>错误: 配置模块加载失败</font>")
-    
+
     def _test_ffmpeg(self):
         ffmpeg_path = self.ffmpeg_path_edit.text().strip() or "ffmpeg"
         ffprobe_path = self.ffprobe_path_edit.text().strip() or "ffprobe"
-        
+
         self.console.append("<hr><b>测试FFmpeg配置...</b>")
-        
+
         # Chain the checks: FFmpeg -> FFprobe -> Finish
-        self._check_tool_async("FFmpeg", ffmpeg_path, 
-            next_step=lambda: self._check_tool_async("FFprobe", ffprobe_path, 
-                next_step=lambda: self.console.append("<b>测试完成</b><hr>")))
+        self._check_tool_async(
+            "FFmpeg",
+            ffmpeg_path,
+            next_step=lambda: self._check_tool_async(
+                "FFprobe",
+                ffprobe_path,
+                next_step=lambda: self.console.append("<b>测试完成</b><hr>"),
+            ),
+        )
 
     def _check_tool_async(self, name, path, next_step=None):
         process = QProcess(self)
-        
-        def handle_finished(exit_code, exit_status):
-            if exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit:
-                self.console.append(f"<font color='#2ecc71'>✓ {name} 可用: {path}</font>")
-                output = bytes(process.readAllStandardOutput()).decode('utf-8', errors='ignore')
-                if name == "FFmpeg":
-                    version_line = output.split('\n')[0] if output else "未知版本"
-                    self.console.append(f"<font color='#9aace5'>版本: {version_line}</font>")
-            else:
-                self.console.append(f"<font color='#e74c3c'>✗ {name} 不可用: {path}</font>")
-                error = bytes(process.readAllStandardError()).decode('utf-8', errors='ignore')
-                if error:
-                    self.console.append(f"<font color='#e74c3c'>错误: {error[:200]}</font>")
-                else:
-                    self.console.append(f"<font color='#e74c3c'>警告: 进程返回错误码 {exit_code}</font>")
-            
+        completed = False
+
+        def complete():
+            nonlocal completed
+            if completed:
+                return
+            completed = True
             process.deleteLater()
-            if next_step: next_step()
+            if next_step:
+                next_step()
+
+        def handle_finished(exit_code, exit_status):
+            if completed:
+                return
+            if exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit:
+                self.console.append(
+                    f"<font color='#2ecc71'>✓ {name} 可用: {path}</font>"
+                )
+                output = bytes(process.readAllStandardOutput()).decode(
+                    "utf-8", errors="ignore"
+                )
+                if name == "FFmpeg":
+                    version_line = output.split("\n")[0] if output else "未知版本"
+                    self.console.append(
+                        f"<font color='#9aace5'>版本: {version_line}</font>"
+                    )
+            else:
+                self.console.append(
+                    f"<font color='#e74c3c'>✗ {name} 不可用: {path}</font>"
+                )
+                error = bytes(process.readAllStandardError()).decode(
+                    "utf-8", errors="ignore"
+                )
+                if error:
+                    self.console.append(
+                        f"<font color='#e74c3c'>错误: {error[:200]}</font>"
+                    )
+                else:
+                    self.console.append(
+                        f"<font color='#e74c3c'>警告: 进程返回错误码 {exit_code}</font>"
+                    )
+
+            complete()
 
         def handle_error(error):
-             self.console.append(f"<font color='#e74c3c'>✗ {name} 启动失败: {path}</font>")
-             self.console.append(f"<font color='#e74c3c'>QProcess错误代码: {error}</font>")
-             process.deleteLater()
-             if next_step: next_step()
+            if completed:
+                return
+            self.console.append(
+                f"<font color='#e74c3c'>✗ {name} 启动失败: {path}</font>"
+            )
+            self.console.append(
+                f"<font color='#e74c3c'>QProcess错误代码: {error}</font>"
+            )
+            complete()
 
         process.finished.connect(handle_finished)
         process.errorOccurred.connect(handle_error)
         process.start(path, ["-version"])
 
-    
     def _reset_to_defaults(self):
-        reply = QMessageBox.question(self, "确认重置", 
-                                    "确定要重置所有设置为默认值吗？",
-                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                    QMessageBox.StandardButton.No)
-        
+        reply = QMessageBox.question(
+            self,
+            "确认重置",
+            "确定要重置所有设置为默认值吗？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
         if reply == QMessageBox.StandardButton.Yes:
             self.ffmpeg_path_edit.clear()
             self.ffprobe_path_edit.clear()
             self.overwrite_files_check.setChecked(True)
             self.console.append("<font color='#2ecc71'>设置已重置为默认值</font>")
-            self.console.append("<font color='#f1c40f'>请点击'保存设置'以应用更改</font>")
-    
+            self.console.append(
+                "<font color='#f1c40f'>请点击'保存设置'以应用更改</font>"
+            )
+
     def set_buttons_enabled(self, enabled):
         # 设置选项卡没有需要禁用的按钮
         pass
+
 
 # --- 修改后的 AboutTab ---
 class AboutTab(BaseTab, Ui_AboutTab):
