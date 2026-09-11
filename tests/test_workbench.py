@@ -460,6 +460,83 @@ class WorkbenchTests(unittest.TestCase):
         self.assertFalse(self.window.windowIcon().isNull())
         self.assertTrue(self.window.enqueue_button.isVisible())
 
+    def test_trim_workspace_reflows_without_losing_segments(self):
+        form = self.window.forms["trim"]
+        self.window.navigation.setCurrentRow(1)
+        workspace = form.trim_workspace
+        workspace.setFixedWidth(600)
+        APP.processEvents()
+        self.assertEqual(workspace.columns, 2)
+        self.assertGreater(workspace.segments.x(), form.preview.x())
+        form.start.setValue(1.25)
+        form.end.setValue(3.75)
+        form.add_segment()
+        workspace.setFixedWidth(340)
+        APP.processEvents()
+        self.assertEqual(workspace.columns, 1)
+        self.assertGreater(workspace.segments.y(), form.preview.y())
+        self.assertEqual(form.values()["segments"], [[1.25, 3.75]])
+        form.segment_list.setCurrentRow(0)
+        form.remove_segment()
+        self.assertEqual(form.values()["segments"], [])
+
+    def test_task_fields_reflow_preserves_values_and_conditional_rows(self):
+        from ui.task_forms import VideoFields
+        editor = VideoFields()
+        try:
+            editor.resize(620, 700)
+            editor.show()
+            APP.processEvents()
+            fields = editor.basic
+            self.assertEqual(fields.columns, 2)
+            codec = fields.cells["video_codec"]
+            mode = fields.cells["quality_mode"]
+            self.assertEqual(codec.y(), mode.y())
+            self.assertGreater(mode.x(), codec.x())
+            editor.mode.setCurrentText("码率")
+            fields.fields["video_bitrate"].setText("8500k")
+            APP.processEvents()
+            self.assertTrue(fields.cells["quality"].isHidden())
+            self.assertFalse(fields.cells["video_bitrate"].isHidden())
+            editor.resize(320, 700)
+            APP.processEvents()
+            self.assertEqual(fields.columns, 1)
+            self.assertEqual(codec.x(), mode.x())
+            self.assertGreater(mode.y(), codec.y())
+            self.assertEqual(editor.values()["video_bitrate"], "8500k")
+            self.assertTrue(fields.cells["quality"].isHidden())
+        finally:
+            editor.close()
+
+    def test_material_settings_scroll_keeps_save_action_reachable(self):
+        from styles import STYLESHEET
+        from PySide6.QtWidgets import QScrollArea, QPushButton
+        self.window.setStyleSheet(STYLESHEET)
+        self.window.resize(900, 620)
+        self.window.navigation.setCurrentRow(6)
+        APP.processEvents()
+        scroll = self.window.pages.currentWidget()
+        self.assertIsInstance(scroll, QScrollArea)
+        save = next(b for b in scroll.findChildren(QPushButton)
+                    if b.text() == "保存并重新检测")
+        scroll.ensureWidgetVisible(save)
+        APP.processEvents()
+        position = save.mapTo(scroll.viewport(), save.rect().center())
+        self.assertTrue(scroll.viewport().rect().contains(position))
+        self.assertGreaterEqual(save.height(), save.minimumSizeHint().height())
+
+    def test_material_combo_and_checkbox_keyboard_interaction(self):
+        from styles import STYLESHEET
+        self.window.setStyleSheet(STYLESHEET)
+        self.window.scope.setFocus()
+        QTest.keyClick(self.window.scope, Qt.Key.Key_Down)
+        self.assertEqual(self.window.scope.currentData(), "selected")
+        self.window.show_log.setFocus()
+        QTest.keyClick(self.window.show_log, Qt.Key.Key_Space)
+        self.assertTrue(self.window.log_view.isVisible())
+        QTest.keyClick(self.window.show_log, Qt.Key.Key_Space)
+        self.assertFalse(self.window.log_view.isVisible())
+
     def test_missing_engine_reports_error_without_closing_settings(self):
         self.config.data["ffmpeg_path"] = "__missing_sdb_engine__"
         self.window.engine.refresh()

@@ -32,7 +32,7 @@ class Ui_SettingsTab:
         
         # 路径说明标签
         path_note = QLabel("留空或填写 'ffmpeg'/'ffprobe' 将使用系统PATH中的程序")
-        path_note.setStyleSheet("color: #888; font-size: 8pt;")
+        path_note.setObjectName("muted")
         ffmpeg_layout.addWidget(path_note)
         
         # 测试按钮
@@ -69,7 +69,7 @@ class Ui_SettingsTab:
         
         # 底部说明
         note = QLabel("部分设置需要重启应用才能生效")
-        note.setStyleSheet("color: #f1c40f; font-size: 8pt; font-style: italic;")
+        note.setObjectName("warning")
         note.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(note)
         

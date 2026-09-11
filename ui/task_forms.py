@@ -5,7 +5,7 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QComboBox,
     QLineEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QPushButton, QGroupBox,
-    QListWidget, QSlider,
+    QListWidget, QSlider, QGridLayout, QSizePolicy,
 )
 
 from core.commands import VIDEO_ENCODERS, RESOLUTION_PRESETS
@@ -34,17 +34,81 @@ def note(text):
 
 
 class Fields(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, two_columns=False):
         super().__init__(parent)
+        self.two_columns = two_columns
+        self.cells = {}
+        self.hidden_fields = set()
+        self.columns = 0
+        if two_columns:
+            self.grid = QGridLayout(self)
+            self.grid.setContentsMargins(0, 4, 0, 4)
+            self.grid.setHorizontalSpacing(16)
+            self.grid.setVerticalSpacing(12)
+            self.grid.setAlignment(Qt.AlignmentFlag.AlignTop)
+            self.fields = {}
+            return
         self.form = QFormLayout(self)
         self.form.setContentsMargins(0, 4, 0, 4)
+        self.form.setHorizontalSpacing(16)
+        self.form.setVerticalSpacing(10)
         self.form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self.fields = {}
 
     def add(self, key, label, widget):
         self.fields[key] = widget
-        self.form.addRow(label, widget)
+        if self.two_columns:
+            cell = QWidget(self)
+            layout = QVBoxLayout(cell)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(4)
+            caption = QLabel(label)
+            caption.setWordWrap(True)
+            caption.setBuddy(widget)
+            layout.addWidget(caption)
+            layout.addWidget(widget)
+            cell.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            self.cells[key] = cell
+            self._reflow()
+        else:
+            self.form.addRow(label, widget)
         return widget
+
+    def set_row_visible(self, widget, visible):
+        if not self.two_columns:
+            self.form.setRowVisible(widget, visible)
+            return
+        key = next(key for key, field in self.fields.items() if field is widget)
+        if visible:
+            self.hidden_fields.discard(key)
+        else:
+            self.hidden_fields.add(key)
+        self.cells[key].setVisible(visible)
+        self._reflow()
+
+    def _reflow(self):
+        self.columns = 2 if self.width() >= 400 else 1
+        while self.grid.count():
+            self.grid.takeAt(0)
+        self.grid.setColumnStretch(0, 1)
+        self.grid.setColumnStretch(1, 1 if self.columns == 2 else 0)
+        row, column = 0, 0
+        for key, cell in self.cells.items():
+            if key in self.hidden_fields:
+                continue
+            # Long checkbox labels need the full row at either breakpoint.
+            span = self.columns if isinstance(self.fields[key], QCheckBox) else 1
+            if span > 1 and column:
+                row, column = row + 1, 0
+            self.grid.addWidget(cell, row, column, 1, span)
+            column += span
+            if column >= self.columns:
+                row, column = row + 1, 0
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self.two_columns and (2 if self.width() >= 400 else 1) != self.columns:
+            self._reflow()
 
     def values(self):
         values = {}
@@ -83,7 +147,7 @@ class VideoFields(QWidget):
         super().__init__()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        self.basic = Fields()
+        self.basic = Fields(two_columns=True)
         self.codec = self.basic.add("video_codec", "视频编码", combo(VIDEO_ENCODERS))
         self.mode = self.basic.add("quality_mode", "质量控制", combo(["CRF", "码率"]))
         quality = QDoubleSpinBox()
@@ -108,7 +172,7 @@ class VideoFields(QWidget):
         self.more.setCheckable(True)
         self.more.setChecked(False)
         more_layout = QVBoxLayout(self.more)
-        self.advanced = Fields()
+        self.advanced = Fields(two_columns=True)
         for key, label, placeholder in [("fps", "帧率", "保持原始"), ("pix_fmt", "像素格式", "自动，如 yuv420p10le"), ("color_transfer", "传递函数", "保持源信息，如 smpte2084"), ("color_primaries", "色彩原色", "保持源信息，如 bt2020"), ("color_space", "色彩矩阵", "保持源信息，如 bt2020nc")]:
             edit = QLineEdit()
             edit.setPlaceholderText(placeholder)
@@ -154,14 +218,14 @@ class VideoFields(QWidget):
 
     def _mode_changed(self):
         bitrate = self.mode.currentText() == "码率"
-        self.basic.form.setRowVisible(self.basic.fields["video_bitrate"], bitrate)
-        self.basic.form.setRowVisible(self.basic.fields["quality"], not bitrate)
+        self.basic.set_row_visible(self.basic.fields["video_bitrate"], bitrate)
+        self.basic.set_row_visible(self.basic.fields["quality"], not bitrate)
 
     def _audio_changed(self):
-        self.basic.form.setRowVisible(self.basic.fields["audio_bitrate"], self.basic.fields["audio_codec"].currentData() == "aac")
+        self.basic.set_row_visible(self.basic.fields["audio_bitrate"], self.basic.fields["audio_codec"].currentData() == "aac")
 
     def _resolution_changed(self):
-        self.basic.form.setRowVisible(self.resolution, self.resolution_preset.currentData() == "custom")
+        self.basic.set_row_visible(self.resolution, self.resolution_preset.currentData() == "custom")
 
     def values(self):
         return {**self.basic.values(), **self.advanced.values()}
@@ -178,7 +242,7 @@ class FrameView(QLabel):
         super().__init__("媒体预览")
         self.image = None
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setStyleSheet("background: #17253b; color: #a8bdd9; border-radius: 6px;")
+        self.setObjectName("preview")
 
     def display(self, image):
         self.image = image
@@ -268,13 +332,40 @@ class Preview(QWidget):
         QMetaObject.invokeMethod(self.player, "setSource", Qt.ConnectionType.QueuedConnection, Q_ARG(QUrl, QUrl()))
 
 
+class TrimWorkspace(QWidget):
+    """Keep preview and segment editing side by side when space allows."""
+
+    def __init__(self, preview, segments):
+        super().__init__()
+        self.preview = preview
+        self.segments = segments
+        self.columns = 0
+        self.grid = QGridLayout(self)
+        self.grid.setContentsMargins(0, 0, 0, 0)
+        self.grid.setSpacing(16)
+        self._reflow()
+
+    def _reflow(self):
+        self.columns = 2 if self.width() >= 520 else 1
+        self.grid.addWidget(self.preview, 0, 0, Qt.AlignmentFlag.AlignTop)
+        self.grid.addWidget(self.segments, 0 if self.columns == 2 else 1,
+                            1 if self.columns == 2 else 0)
+        self.grid.setColumnStretch(0, 1)
+        self.grid.setColumnStretch(1, 1 if self.columns == 2 else 0)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if (2 if self.width() >= 520 else 1) != self.columns:
+            self._reflow()
+
+
 class TaskForm(QWidget):
     def __init__(self, operation):
         super().__init__()
         self.operation = operation
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
-        self.fields = Fields()
+        self.fields = Fields(two_columns=True)
         self.video_fields = None
         self.preview = None
         self.soft_audio = None
@@ -309,33 +400,43 @@ class TaskForm(QWidget):
             self.layout.addWidget(note("勾选源文件中的流即可无损抽取或换封装；配对外部音频后可组合封装。每行文件代表一个独立任务组。"))
         if operation == "trim":
             self.preview = Preview()
-            self.layout.addWidget(self.preview)
+            segment_panel = QWidget()
+            segment_layout = QVBoxLayout(segment_panel)
+            segment_layout.setContentsMargins(0, 0, 0, 0)
+            segment_layout.setSpacing(8)
             self.start = QDoubleSpinBox()
             self.end = QDoubleSpinBox()
             for widget in (self.start, self.end):
                 widget.setDecimals(3)
                 widget.setRange(0, 9999999)
                 widget.setSuffix(" 秒")
-            for widget, label in ((self.start, "设入点"), (self.end, "设出点")):
+            for widget, label, caption in ((self.start, "设入点", "入点 · 片段开始"),
+                                           (self.end, "设出点", "出点 · 片段结束")):
+                segment_layout.addWidget(QLabel(caption))
                 times = QHBoxLayout()
                 times.addWidget(widget, 1)
                 times.addWidget(button(label, lambda checked=False, target=widget: target.setValue(self.preview.player.position() / 1000)))
-                self.layout.addLayout(times)
+                segment_layout.addLayout(times)
             self.segment_list = QListWidget()
+            segment_layout.addWidget(button("添加片段", self.add_segment))
+            segment_layout.addWidget(QLabel("片段列表 · 按顺序导出"))
+            self.segment_list.setMinimumHeight(72)
             self.segment_list.setMaximumHeight(105)
-            self.layout.addWidget(self.segment_list)
+            self.segment_list.setAccessibleName("待导出的粗剪片段")
+            segment_layout.addWidget(self.segment_list)
             row = QHBoxLayout()
-            row.addWidget(button("添加片段", self.add_segment))
             row.addWidget(button("删除", self.remove_segment))
             row.addWidget(button("↑", lambda: self.move_segment(-1)))
             row.addWidget(button("↓", lambda: self.move_segment(1)))
-            self.layout.addLayout(row)
+            segment_layout.addLayout(row)
+            self.trim_workspace = TrimWorkspace(self.preview, segment_panel)
+            self.layout.addWidget(self.trim_workspace)
             self.fields.add("trim_mode", "剪切方式", VideoFields._choices([("无损关键帧剪切", "copy"), ("精确剪切 · 重新编码", "encode")]))
             self.fields.add("merge", "输出方式", QCheckBox("按列表顺序合并片段"))
             self.layout.addWidget(note("无损剪切可能偏离设定切点；精确剪切会重新编码。合并限同一源文件，批量逐文件检查区间。"))
         self.layout.addWidget(self.fields)
         if operation == "subtitle":
-            self.soft_audio = Fields()
+            self.soft_audio = Fields(two_columns=True)
             self.soft_audio.add("audio_codec", "音频处理", VideoFields._choices([("无损复制", "copy"), ("转为 AAC", "aac"), ("移除音频", "none")]))
             self.soft_audio.add("audio_bitrate", "AAC 码率", QLineEdit("192k"))
             self.layout.addWidget(self.soft_audio)
@@ -357,9 +458,9 @@ class TaskForm(QWidget):
             burn = self.fields.values()["subtitle_mode"] == "burn"
             self.video_fields.setVisible(burn)
             self.soft_audio.setVisible(not burn)
-            self.soft_audio.form.setRowVisible(self.soft_audio.fields["audio_bitrate"], self.soft_audio.values()["audio_codec"] == "aac")
+            self.soft_audio.set_row_visible(self.soft_audio.fields["audio_bitrate"], self.soft_audio.values()["audio_codec"] == "aac")
             for key in ("font", "font_size", "alignment"):
-                self.fields.form.setRowVisible(self.fields.fields[key], burn)
+                self.fields.set_row_visible(self.fields.fields[key], burn)
         if self.video_fields and self.operation == "trim":
             self.video_fields.setVisible(self.fields.values()["trim_mode"] == "encode")
 
@@ -369,7 +470,7 @@ class TaskForm(QWidget):
         extension.clear()
         extension.addItems({"AAC": ["m4a", "aac"], "WAV": ["wav"], "FLAC": ["flac"], "ALAC": ["m4a"]}[fmt])
         for key, visible in [("audio_bitrate", fmt == "AAC"), ("compression", fmt == "FLAC"), ("bits", fmt != "AAC")]:
-            self.fields.form.setRowVisible(self.fields.fields[key], visible)
+            self.fields.set_row_visible(self.fields.fields[key], visible)
 
     def add_segment(self):
         if self.end.value() <= self.start.value():

@@ -52,7 +52,7 @@ class Ui_AboutTab:
         title_label.setObjectName("aboutTitle")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         # 设置字体样式：20pt，加粗，白色，顶部微调
-        title_label.setStyleSheet("font-size: 20pt; font-weight: bold; color: #ffffff; margin-top: 5px;")
+
 
         header_layout.addWidget(logo_label)
         header_layout.addWidget(title_label)
@@ -72,7 +72,7 @@ class Ui_AboutTab:
         def create_label(text):
             lbl = QLabel(text)
             lbl.setObjectName("infoLabel")
-            lbl.setStyleSheet("font-weight: bold; color: #bdc3c7;")
+
             return lbl
 
         # --- 信息行 ---
@@ -87,7 +87,7 @@ class Ui_AboutTab:
 
         # 仓库链接
         info_layout.addWidget(create_label("仓库:"), 2, 0, Qt.AlignmentFlag.AlignRight)
-        github_link = f'<a href="{GITHUB_URL}" style="color:#1abc9c; text-decoration: none;">GitHub</a>'
+        github_link = f'<a href="{GITHUB_URL}" style="color:#435e91; text-decoration: none;">GitHub</a>'
         github_label = QLabel(github_link)
         github_label.setOpenExternalLinks(True)  # 允许点击打开浏览器
         github_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)

@@ -35,7 +35,7 @@ class EmptyTable(QTableWidget):
         self.empty_description = description
         self.setShowGrid(False)
         self.setAlternatingRowColors(True)
-        self.verticalHeader().setDefaultSectionSize(38)
+        self.verticalHeader().setDefaultSectionSize(44)
 
     def paintEvent(self, event):
         super().paintEvent(event)
@@ -46,7 +46,7 @@ class EmptyTable(QTableWidget):
         font = self.font()
         font.setBold(True)
         painter.setFont(font)
-        painter.setPen(QColor("#526783"))
+        painter.setPen(QColor("#44474f"))
         if rect.height() < 64:
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.empty_heading)
             painter.end()
@@ -55,7 +55,7 @@ class EmptyTable(QTableWidget):
         font.setBold(False)
         font.setPointSize(9)
         painter.setFont(font)
-        painter.setPen(QColor("#74859b"))
+        painter.setPen(QColor("#44474f"))
         painter.drawText(rect.adjusted(0, 30, 0, 0), Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, self.empty_description)
         painter.end()
 
@@ -146,7 +146,7 @@ class Workbench(QMainWindow):
         side.addWidget(brand)
         side.addWidget(note("天梦工具箱 · 媒体工作台"))
         side.addSpacing(24)
-        section = QLabel("工 作 空 间")
+        section = QLabel("工作空间")
         section.setObjectName("sidebarSection")
         side.addWidget(section)
         self.navigation = QListWidget()
@@ -280,12 +280,15 @@ class Workbench(QMainWindow):
         output_actions.addWidget(self.cancel_edit)
         editor_layout.addLayout(output_actions)
         self.horizontal.addWidget(editor_panel)
-        self.horizontal.setSizes([480, 450])
+        self.horizontal.setSizes([400, 560])
         self.horizontal.setChildrenCollapsible(False)
         workspace_layout.addWidget(self.horizontal)
         self.pages.addWidget(workspace)
         self.pages.addWidget(self._advanced())
-        self.pages.addWidget(self._settings())
+        settings_scroll = QScrollArea()
+        settings_scroll.setWidgetResizable(True)
+        settings_scroll.setWidget(self._settings())
+        self.pages.addWidget(settings_scroll)
         self.vertical.addWidget(self.pages)
         queue_panel = QWidget()
         queue_panel.setObjectName("card")

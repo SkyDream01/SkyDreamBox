@@ -65,36 +65,8 @@ class CustomSplashScreen(QSplashScreen):
         layout.addStretch(1)
 
         # --- 4. 应用样式表 ---
-        self.container.setStyleSheet("""
-            #splashContainer {
-                background-color: #34495e;
-                border-radius: 8px; /* 轻微的圆角 */
-            }
-            #splashTitle {
-                font-size: 26pt;
-                font-weight: bold;
-                color: #ffffff;
-            }
-            #splashVersion {
-                font-size: 10pt;
-                color: #bdc3c7;
-                padding-bottom: 20px;
-            }
-            #splashMessage {
-                font-size: 9pt;
-                color: #ecf0f1;
-            }
-            #splashProgressBar {
-                min-height: 4px;
-                max-height: 4px;
-                border-radius: 2px;
-                background-color: #2c3e50; /* 进度条背景色 */
-            }
-            #splashProgressBar::chunk {
-                background-color: #1abc9c;
-                border-radius: 2px;
-            }
-        """)
+        from styles import STYLESHEET
+        self.container.setStyleSheet(STYLESHEET)
 
     def showMessage(self, message, alignment=Qt.AlignmentFlag.AlignLeft, color=Qt.GlobalColor.black):
         self.message_label.setText(message)
