@@ -9,6 +9,31 @@ from validators import validate_bitrate, validate_fps, validate_resolution
 
 VIDEO_ENCODERS = ["libx264", "libx265", "h264_nvenc", "hevc_nvenc", "h264_qsv", "hevc_qsv", "h264_amf", "hevc_amf", "libaom-av1"]
 VIDEO_CODECS = {"libx264": "h264", "libx265": "hevc", "libaom-av1": "av1"}
+RESOLUTION_PRESETS = {"720P": (1280, 720), "1080P": (1920, 1080), "2K": (2560, 1440), "4K": (3840, 2160)}
+
+
+def resolution_filter(options):
+    # Missing preset keys belong to older saved tasks with a custom resolution.
+    preset = options.get("resolution_preset", "custom")
+    if preset == "original":
+        return ""
+    if preset in RESOLUTION_PRESETS:
+        width, height = RESOLUTION_PRESETS[preset]
+        # Fit the display aspect ratio inside an orientation-aware bounding box.
+        # Even dimensions and square pixels also support common 4:2:0 encoders.
+        return (
+            f"scale=w='max(2,trunc(if(gte(dar,1),min({width},{height}*dar),"
+            f"min({height},{width}*dar))/2)*2)'"
+            ":h='max(2,trunc(ow/dar/2)*2)',setsar=1"
+        )
+    if preset != "custom":
+        raise ValueError("请选择有效的分辨率预设")
+    resolution = options.get("resolution", "")
+    if not validate_resolution(resolution):
+        raise ValueError("分辨率格式应为 1920:1080 或 1920:-2")
+    return "scale=" + resolution if resolution else ""
+
+
 # Conservative interoperability policy; MKV accepts most common streams.
 COMPATIBLE = {
     "mp4": {"video": {"h264", "hevc", "av1", "mpeg4"}, "audio": {"aac", "mp3", "alac", "ac3", "eac3"}, "subtitle": {"mov_text"}},
@@ -169,10 +194,9 @@ def build_plan(task: TaskSpec, media: MediaInfo, media_by_path=None, available=N
         check_compatible(ext, replace(stream_at(media, v), codec=VIDEO_CODECS.get(codec, "hevc" if "hevc" in codec else "h264")))
         result = ["-map", f"0:{v}"] + video_args(options, media, available)
         filters = []
-        if options.get("resolution"):
-            if not validate_resolution(options["resolution"]):
-                raise ValueError("分辨率格式应为 1920:1080 或 1920:-2")
-            filters.append("scale=" + options["resolution"])
+        scale = resolution_filter(options)
+        if scale:
+            filters.append(scale)
         if task.operation == "subtitle":
             subtitle = Path(options.get("subtitle", ""))
             if not subtitle.is_file() or subtitle.suffix.lower() not in {".srt", ".ass", ".ssa"}:

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QListWidget, QSlider,
 )
 
-from core.commands import VIDEO_ENCODERS
+from core.commands import VIDEO_ENCODERS, RESOLUTION_PRESETS
 
 
 def combo(items):
@@ -95,13 +95,21 @@ class VideoFields(QWidget):
         self.basic.add("audio_codec", "音频处理", self._choices([("无损复制", "copy"), ("转为 AAC", "aac"), ("移除音频", "none")]))
         self.basic.add("audio_bitrate", "AAC 码率", QLineEdit("192k"))
         self.basic.fields["audio_codec"].currentIndexChanged.connect(self._audio_changed)
+        self.resolution_preset = self.basic.add("resolution_preset", "分辨率", self._choices(
+            [("原始分辨率", "original")] + [(name, name) for name in RESOLUTION_PRESETS] + [("自定义", "custom")]
+        ))
+        self.resolution_preset.setToolTip("预设按横竖屏自动适配，保持长宽比、不裁剪；2K 为 2560×1440，4K 为 3840×2160")
+        self.resolution = self.basic.add("resolution", "自定义宽高", QLineEdit())
+        self.resolution.setPlaceholderText("如 1920:1080 或 1920:-2（自动计算高度）")
+        self.resolution_preset.currentIndexChanged.connect(self._resolution_changed)
+        self._resolution_changed()
         layout.addWidget(self.basic)
         self.more = QGroupBox("高级参数")
         self.more.setCheckable(True)
         self.more.setChecked(False)
         more_layout = QVBoxLayout(self.more)
         self.advanced = Fields()
-        for key, label, placeholder in [("resolution", "分辨率", "保持原始，如 1920:-2"), ("fps", "帧率", "保持原始"), ("pix_fmt", "像素格式", "自动，如 yuv420p10le"), ("color_transfer", "传递函数", "保持源信息，如 smpte2084"), ("color_primaries", "色彩原色", "保持源信息，如 bt2020"), ("color_space", "色彩矩阵", "保持源信息，如 bt2020nc")]:
+        for key, label, placeholder in [("fps", "帧率", "保持原始"), ("pix_fmt", "像素格式", "自动，如 yuv420p10le"), ("color_transfer", "传递函数", "保持源信息，如 smpte2084"), ("color_primaries", "色彩原色", "保持源信息，如 bt2020"), ("color_space", "色彩矩阵", "保持源信息，如 bt2020nc")]:
             edit = QLineEdit()
             edit.setPlaceholderText(placeholder)
             self.advanced.add(key, label, edit)
@@ -152,10 +160,15 @@ class VideoFields(QWidget):
     def _audio_changed(self):
         self.basic.form.setRowVisible(self.basic.fields["audio_bitrate"], self.basic.fields["audio_codec"].currentData() == "aac")
 
+    def _resolution_changed(self):
+        self.basic.form.setRowVisible(self.resolution, self.resolution_preset.currentData() == "custom")
+
     def values(self):
         return {**self.basic.values(), **self.advanced.values()}
 
     def restore(self, values):
+        values = dict(values)
+        values.setdefault("resolution_preset", "custom" if values.get("resolution") else "original")
         self.basic.restore(values)
         self.advanced.restore(values)
 
