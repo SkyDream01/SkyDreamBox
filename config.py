@@ -62,6 +62,7 @@ class Config:
             "overwrite_files": DEFAULT_OVERWRITE_FILES,
             "config_version": 2,
             "presets": {},
+            "theme": "light",
         }
 
     def load(self) -> bool:

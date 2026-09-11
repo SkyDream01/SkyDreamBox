@@ -5,9 +5,9 @@ import subprocess
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, QUrl, QProcess
-from PySide6.QtGui import QColor, QDesktopServices, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
+from PySide6.QtGui import QPalette, QDesktopServices, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidget,
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidget,
     QSplitter, QStackedWidget, QScrollArea, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QFileDialog, QMessageBox, QLineEdit,
     QCheckBox, QPlainTextEdit, QTextEdit, QTabWidget, QInputDialog,
@@ -21,6 +21,7 @@ from core.queue import TaskQueue
 from core.services import ProbeService, EngineService
 from ui.task_forms import TaskForm, Fields, button, note, VideoFields
 from utils import resource_path
+from styles import apply_theme, normalize_theme
 
 
 OPERATIONS = [("video", "视频压制", "自定义编码与画质，保留每一处细节"), ("trim", "音视频粗剪", "预览、标记与导出你需要的片段"), ("subtitle", "字幕处理", "可开关字幕轨，或将字幕固定到画面"), ("audio", "音频转换", "AAC / WAV / FLAC / ALAC"), ("mux", "抽取与封装", "选择媒体流，无损抽取与重新封装")]
@@ -46,7 +47,7 @@ class EmptyTable(QTableWidget):
         font = self.font()
         font.setBold(True)
         painter.setFont(font)
-        painter.setPen(QColor("#44474f"))
+        painter.setPen(self.palette().color(QPalette.ColorRole.PlaceholderText))
         if rect.height() < 64:
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.empty_heading)
             painter.end()
@@ -55,7 +56,7 @@ class EmptyTable(QTableWidget):
         font.setBold(False)
         font.setPointSize(9)
         painter.setFont(font)
-        painter.setPen(QColor("#44474f"))
+        painter.setPen(self.palette().color(QPalette.ColorRole.PlaceholderText))
         painter.drawText(rect.adjusted(0, 30, 0, 0), Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, self.empty_description)
         painter.end()
 
@@ -107,6 +108,7 @@ class Workbench(QMainWindow):
         self.resize(1320, 860)
         self.setMinimumSize(900, 620)
         self._build()
+        self._apply_theme()
         self.probe.ready.connect(self._media_ready)
         self.probe.failed.connect(self._media_failed)
         self.engine.updated.connect(self._engine_updated)
@@ -121,6 +123,21 @@ class Workbench(QMainWindow):
             QTimer.singleShot(0, self.engine.refresh)
         QShortcut(QKeySequence("Ctrl+O"), self, activated=self.choose_files)
         QShortcut(QKeySequence("Ctrl+Return"), self, activated=self.enqueue)
+
+    def _apply_theme(self):
+        theme = normalize_theme(self.config.get("theme", "light"))
+        apply_theme(QApplication.instance(), theme)
+        target = "白天" if theme == "dark" else "黑夜"
+        self.theme_button.setText(f"切换到{target}模式")
+        self.theme_button.setToolTip(f"切换到{target}配色，自动记住选择")
+        self.theme_button.setAccessibleName(f"切换到{target}模式")
+
+    def toggle_theme(self):
+        theme = normalize_theme(self.config.get("theme", "light"))
+        self.config.set("theme", "light" if theme == "dark" else "dark")
+        self._apply_theme()
+        if not self.config.save():
+            self._notify("配色已切换，但保存失败，重启后可能恢复原配色。")
 
     def _build(self):
         root = QWidget()
@@ -162,6 +179,9 @@ class Workbench(QMainWindow):
         for widget in (self.advanced_button, self.settings_button):
             widget.setCheckable(True)
             side.addWidget(widget)
+        self.theme_button = button("", self.toggle_theme)
+        self.theme_button.setObjectName("themeToggle")
+        side.addWidget(self.theme_button)
         side.addSpacing(16)
         side.addWidget(note("本地处理 · 安心创作\n单个文件 / 批量任务"))
         layout.addWidget(sidebar)

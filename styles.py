@@ -1,4 +1,7 @@
-"""Material Design 3 light theme. Tonal surfaces and blue semantic color roles."""
+"""Application-wide light and dark themes with matching Qt palettes."""
+import re
+
+from PySide6.QtGui import QColor, QPalette
 
 from utils import resource_path
 
@@ -130,3 +133,79 @@ QRadioButton::indicator:checked { border: 5px solid #435e91; width: 12px; height
 """.replace("EXPAND", resource_path("assets/material/expand.svg").replace("\\", "/")).replace(
     "CHECK", resource_path("assets/material/check.svg").replace("\\", "/")
 ).replace("MINUS", resource_path("assets/material/minus.svg").replace("\\", "/"))
+
+
+# Substitute color literals in one pass so replacement colors never cascade.
+DARK_COLORS = {
+    "#1a1c20": "#e3e2e9", "#f9f9ff": "#111318",
+    "#eff0f7": "#191c23", "#44474f": "#c4c6d0",
+    "#294777": "#c1d5ff", "#d7e3ff": "#293f65",
+    "#001b3f": "#d7e3ff", "#ffffff": "#20232b",
+    "#e3e5ed": "#2b2f39", "#dce2f0": "#35415a",
+    "#151c2b": "#e0e7fa", "#f2f3fa": "#262932",
+    "#74777f": "#8e9099", "#435e91": "#adc6ff",
+    "#e3e2e6": "#30333b", "#76777c": "#93959f",
+    "#e7e8ef": "#343842", "#4f6999": "#c1d3ff",
+    "#5b73a0": "#97b5f3", "#cac4d0": "#454852",
+    "#7d5260": "#ffd8e4", "#ffd8e4": "#573b46",
+    "#c4c6d0": "#454852", "white": "#20232b",
+}
+
+
+def normalize_theme(theme):
+    return "dark" if theme == "dark" else "light"
+
+
+def get_stylesheet(theme="light"):
+    if normalize_theme(theme) == "light":
+        return STYLESHEET
+    stylesheet = re.sub(
+        r"#[0-9a-fA-F]{6}\b|\bwhite\b",
+        lambda match: DARK_COLORS.get(match.group(), match.group()),
+        STYLESHEET,
+    )
+    stylesheet = stylesheet.replace(
+        resource_path("assets/material/expand.svg").replace("\\", "/"),
+        resource_path("assets/material/expand-dark.svg").replace("\\", "/"),
+    )
+    return stylesheet + """
+QLabel#preview { background: #0b0e14; color: #e3e2e9; }
+QToolTip { background: #dce2f0; color: #151c2b; }
+QCheckBox::indicator:checked, QGroupBox::indicator:checked,
+QCheckBox::indicator:indeterminate { background-color: #435e91; }
+"""
+
+
+def apply_theme(app, theme="light"):
+    """Also style palette-based controls and dialogs outside the main window."""
+    theme = normalize_theme(theme)
+    dark = theme == "dark"
+    stylesheet = get_stylesheet(theme)
+    window_color = "#111318" if dark else "#f9f9ff"
+    if (app.styleSheet() == stylesheet
+            and app.palette().color(QPalette.ColorRole.Window).name() == window_color):
+        return
+    palette = QPalette()
+    colors = {
+        "Window": "#111318" if dark else "#f9f9ff",
+        "WindowText": "#e3e2e9" if dark else "#1a1c20",
+        "Base": "#20232b" if dark else "#ffffff",
+        "AlternateBase": "#262932" if dark else "#f2f3fa",
+        "Text": "#e3e2e9" if dark else "#1a1c20",
+        "Button": "#20232b" if dark else "#ffffff",
+        "ButtonText": "#adc6ff" if dark else "#435e91",
+        "Highlight": "#35415a" if dark else "#dce2f0",
+        "HighlightedText": "#e0e7fa" if dark else "#151c2b",
+        "ToolTipBase": "#dce2f0" if dark else "#1a1c20",
+        "ToolTipText": "#151c2b" if dark else "#ffffff",
+        "Link": "#adc6ff" if dark else "#435e91",
+        "PlaceholderText": "#c4c6d0" if dark else "#44474f",
+    }
+    for role, color in colors.items():
+        palette.setColor(getattr(QPalette.ColorRole, role), QColor(color))
+    for role in (QPalette.ColorRole.Text, QPalette.ColorRole.WindowText,
+                 QPalette.ColorRole.ButtonText):
+        palette.setColor(QPalette.ColorGroup.Disabled, role,
+                         QColor("#93959f" if dark else "#76777c"))
+    app.setPalette(palette)
+    app.setStyleSheet(stylesheet)

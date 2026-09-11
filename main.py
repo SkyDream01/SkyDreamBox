@@ -4,7 +4,8 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from logger import setup_logger
-from styles import STYLESHEET
+from config import get_config
+from styles import apply_theme
 from workbench import Workbench
 
 
@@ -17,7 +18,7 @@ def main():
     app.setApplicationName("SkyDreamBox")
     app.setOrganizationName("SkyDreamBox")
     app.setStyle("Fusion")
-    app.setStyleSheet(STYLESHEET)
+    apply_theme(app, get_config().get("theme", "light"))
     if len(sys.argv) == 3 and sys.argv[1] == "--verify-install":
         from diagnostics import InstallationCheck
         check = InstallationCheck(app, sys.argv[2])

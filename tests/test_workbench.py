@@ -434,6 +434,44 @@ class WorkbenchTests(unittest.TestCase):
         APP.processEvents()
         self.temp.cleanup()
 
+    def test_theme_toggle_updates_palette_and_persists(self):
+        from config import Config
+        from PySide6.QtGui import QPalette
+        from styles import apply_theme
+        self.config = Config(self.temp.name)
+        self.window.config = self.config
+        try:
+            self.assertEqual(self.config.get("theme"), "light")
+            self.window.theme_button.click()
+            APP.processEvents()
+            self.assertEqual(self.config.get("theme"), "dark")
+            self.assertEqual(Config(self.temp.name).get("theme"), "dark")
+            self.assertEqual(APP.palette().color(QPalette.ColorRole.Window).name(), "#111318")
+            self.assertEqual(self.window.theme_button.text(), "切换到白天模式")
+            from workbench import Workbench
+            self.window.close()
+            self.window = Workbench(config=Config(self.temp.name), start_engine=False)
+            self.assertEqual(self.window.theme_button.text(), "切换到白天模式")
+            self.window.theme_button.click()
+            self.assertEqual(Config(self.temp.name).get("theme"), "light")
+            self.assertEqual(APP.palette().color(QPalette.ColorRole.Window).name(), "#f9f9ff")
+        finally:
+            apply_theme(APP, "light")
+
+    def test_saved_dark_theme_and_invalid_theme_fallback(self):
+        from styles import apply_theme
+        from PySide6.QtGui import QPalette
+        try:
+            self.config.set("theme", "dark")
+            self.window._apply_theme()
+            self.assertEqual(APP.palette().color(QPalette.ColorRole.Base).name(), "#20232b")
+            self.config.set("theme", "invalid")
+            self.window._apply_theme()
+            self.assertEqual(APP.palette().color(QPalette.ColorRole.Base).name(), "#ffffff")
+            self.assertEqual(self.window.theme_button.text(), "切换到黑夜模式")
+        finally:
+            apply_theme(APP, "light")
+
     def test_pages_and_window_work_without_engine(self):
         for row in range(7):
             self.window.navigation.setCurrentRow(row)
