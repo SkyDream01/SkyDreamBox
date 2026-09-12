@@ -94,6 +94,11 @@ class TaskQueue(QObject):
         self.tasks = [t for t in self.tasks if t.id != task_id or t is self.current]
         self._changed()
 
+    def clear(self):
+        """Remove queue records while keeping the active task and its process."""
+        self.tasks = [t for t in self.tasks if t is self.current]
+        self._changed()
+
     def move(self, task_id, offset):
         index = next((i for i, t in enumerate(self.tasks) if t.id == task_id), -1)
         target = index + offset

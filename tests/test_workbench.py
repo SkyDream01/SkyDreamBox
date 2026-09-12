@@ -206,6 +206,26 @@ class StorageTests(unittest.TestCase):
         self.assertFalse(restored.save())
         self.assertEqual(self.queue.storage.read_text(), "broken")
 
+    def test_clear_preserves_active_task_and_persists_records(self):
+        output = Path(self.temp.name) / "output.mp4"
+        output.write_bytes(b"existing output")
+        for status in TaskStatus:
+            self.queue.add(TaskSpec("video", "source", str(output), status=status))
+        active = self.queue.tasks[0]
+        active.status = TaskStatus.RUNNING
+        self.queue.current = active
+        self.queue.paused = False
+        self.queue.clear()
+        self.assertEqual(self.queue.tasks, [active])
+        self.assertIs(self.queue.current, active)
+        self.assertFalse(self.queue.paused)
+        self.assertEqual(output.read_bytes(), b"existing output")
+        restored = TaskQueue(self.config, self.probe)
+        self.assertEqual([t.id for t in restored.tasks], [active.id])
+        self.queue.current = None
+        self.queue.clear()
+        self.assertEqual(TaskQueue(self.config, self.probe).tasks, [])
+
     def test_config_migrates_and_keeps_existing_overwrite(self):
         config_path = Path(self.temp.name) / "config.json"
         config_path.write_text(json.dumps({"ffmpeg_path": "custom.exe", "overwrite_files": True}), encoding="utf-8")
@@ -481,6 +501,22 @@ class WorkbenchTests(unittest.TestCase):
         self.window.resize(900, 620)
         APP.processEvents()
         self.assertLessEqual(self.window.width(), 900)
+
+    def test_clear_queue_button_clears_logs_and_edit_state(self):
+        task = self.window.queue.add(TaskSpec("video", "source", "output"))
+        self.window.queue_table.selectRow(0)
+        self.window._log(task.id, "task log")
+        self.window.editing_id = task.id
+        self.window.enqueue_button.setText("保存任务修改")
+        self.assertTrue(self.window.clear_queue_button.isEnabled())
+        self.window.clear_queue_button.click()
+        self.assertEqual(self.window.queue.tasks, [])
+        self.assertEqual(self.window.queue_table.rowCount(), 0)
+        self.assertEqual(self.window.logs, {})
+        self.assertEqual(self.window.log_view.toPlainText(), "")
+        self.assertIsNone(self.window.editing_id)
+        self.assertEqual(self.window.enqueue_button.text(), "加入队列")
+        self.assertFalse(self.window.clear_queue_button.isEnabled())
 
     def test_compact_styled_workspace_keeps_file_controls_accessible(self):
         from styles import STYLESHEET

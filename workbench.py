@@ -344,6 +344,9 @@ class Workbench(QMainWindow):
         for text, callback in [("编辑", self.edit_task), ("重试", lambda: self.queue.retry(self.selected_task_id())), ("移除", lambda: self.queue.remove(self.selected_task_id())), ("↑", lambda: self.queue.move(self.selected_task_id(), -1)), ("↓", lambda: self.queue.move(self.selected_task_id(), 1)), ("打开输出目录", self.open_output)]:
             actions.addWidget(button(text, callback))
         actions.addStretch()
+        self.clear_queue_button = button("清空记录", self.clear_queue)
+        self.clear_queue_button.setToolTip("清空所有非运行中的任务（包括待办）及其日志，保留当前任务，不删除输出文件")
+        actions.addWidget(self.clear_queue_button)
         queue_layout.addLayout(actions)
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
@@ -743,6 +746,14 @@ class Workbench(QMainWindow):
         self.cancel_edit.hide()
         self.output_edit.clear()
 
+    def clear_queue(self):
+        self.queue.clear()
+        retained = {task.id for task in self.queue.tasks}
+        self.logs = {task_id: log for task_id, log in self.logs.items() if task_id in retained}
+        if self.editing_id and self.editing_id not in retained:
+            self.end_edit()
+        self._show_task_log()
+
     def _refresh_queue(self):
         selected = self.selected_task_id()
         self.queue_table.blockSignals(True)
@@ -760,6 +771,7 @@ class Workbench(QMainWindow):
                 self.queue_table.selectRow(row)
         self.queue_table.blockSignals(False)
         completed = sum(t.status == TaskStatus.COMPLETED for t in self.queue.tasks)
+        self.clear_queue_button.setEnabled(any(t is not self.queue.current for t in self.queue.tasks))
         self.queue_label.setText(f"任务队列  {completed}/{len(self.queue.tasks)} 完成 · {'后续已暂停' if self.queue.paused else '顺序执行'}")
 
     def _log(self, task_id, message):
